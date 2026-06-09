@@ -75,6 +75,7 @@ function bindEvents() {
 function seedSchedule() {
   if (Object.keys(state.schedule).some((key) => key.startsWith(state.month))) return;
   const days = getDaysInMonth(state.month);
+  const useJuneExample = state.month === "2026-06";
   state.employees.forEach((employee, employeeIndex) => {
     days.forEach((date, index) => {
       const day = index + 1;
@@ -82,16 +83,18 @@ function seedSchedule() {
       const dow = new Date(`${date}T00:00:00`).getDay();
       const cell = { shifts: [], leaveType: "", note: "", createdBy: "system", updatedBy: "system" };
 
-      if (dow === 0) cell.leaveType = day % 3 === 0 ? "休息日" : "休";
-      if (dow === 1 && employeeIndex % 2 === 0) cell.leaveType = "例假";
-      if (!cell.leaveType && (employeeIndex + day) % 5 !== 0) {
-        cell.shifts = [pickShift(employee, day)];
+      if (useJuneExample) {
+        if (dow === 0) cell.leaveType = day % 3 === 0 ? "休息日" : "休";
+        if (dow === 1 && employeeIndex % 2 === 0) cell.leaveType = "例假";
+        if (!cell.leaveType && (employeeIndex + day) % 5 !== 0) {
+          cell.shifts = [pickShift(employee, day)];
+        }
+        if (employee.id === "e2" && day >= 1 && day <= 7) cell.shifts = ["s3"];
+        if (employee.id === "e2" && day === 8) cell.shifts = ["s5"];
+        if (employee.id === "e3" && [4, 5, 6, 7].includes(day)) cell.leaveType = "特休";
+        if (employee.id === "e6" && [2, 3, 4, 5, 6, 7].includes(day)) cell.shifts = ["s1"];
+        if (holidayDates.has(date) && !cell.leaveType) cell.note = "國定假日出勤";
       }
-      if (employee.id === "e2" && day >= 1 && day <= 7) cell.shifts = ["s3"];
-      if (employee.id === "e2" && day === 8) cell.shifts = ["s5"];
-      if (employee.id === "e3" && [4, 5, 6, 7].includes(day)) cell.leaveType = "特休";
-      if (employee.id === "e6" && [2, 3, 4, 5, 6, 7].includes(day)) cell.shifts = ["s1"];
-      if (holidayDates.has(date) && !cell.leaveType) cell.note = "國定假日出勤";
 
       state.schedule[key] = cell;
     });
@@ -786,3 +789,4 @@ function escapeHtml(value) {
 }
 
 init();
+
