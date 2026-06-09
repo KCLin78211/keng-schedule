@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>耕讀園排班與人資法遵系統</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-lockup">
+      <img class="logo-mark" src="logo.webp" alt="耕讀園 KENG TULYUAN">
+      <div>
+        <p class="eyebrow">耕讀園</p>
+        <h1>排班與人資法遵系統</h1>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label class="field compact">
+        <span>月份</span>
+        <input id="monthPicker" type="month" value="2026-06">
+      </label>
+      <button id="exportCsvBtn" class="button secondary" type="button">匯出 CSV</button>
+      <button id="printBtn" class="button primary" type="button">列印 / PDF</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <nav class="tabs" aria-label="主要功能">
+      <button class="tab active" type="button" data-tab="schedule">排班表</button>
+      <button class="tab" type="button" data-tab="dashboard">人資儀表板</button>
+      <button class="tab" type="button" data-tab="admin">資料維護</button>
+      <button class="tab" type="button" data-tab="rules">法遵規則</button>
+    </nav>
+
+    <section id="schedule" class="panel active" aria-labelledby="schedule-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="schedule-title">月排班矩陣</h2>
+          <p>點選格子編輯班段、休假、例假或休息日；儲存後立即重新檢核。</p>
+        </div>
+        <div class="toolbar-actions">
+          <label class="field compact">
+            <span>查看員工</span>
+            <select id="scheduleEmployeeFilter"></select>
+          </label>
+          <label class="field compact mobile-view-field">
+            <span>手機檢視</span>
+            <select id="mobileScheduleView">
+              <option value="cards">卡片</option>
+              <option value="matrix">矩陣</option>
+            </select>
+          </label>
+          <label class="field compact">
+            <span>檢視角色</span>
+            <select id="roleView">
+              <option value="hr">人資</option>
+              <option value="manager">排班主管</option>
+              <option value="employee">員工</option>
+              <option value="admin">系統管理員</option>
+            </select>
+          </label>
+          <label class="toggle">
+            <input id="copyMode" type="checkbox">
+            <span>套用已複製格</span>
+          </label>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="schedule-wrap">
+        <table id="scheduleTable" class="schedule-table"></table>
+      </div>
+      <div id="mobileScheduleList" class="mobile-schedule-list" aria-label="手機版排班清單"></div>
+    </section>
+
+    <section id="dashboard" class="panel" aria-labelledby="dashboard-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="dashboard-title">人資儀表板</h2>
+          <p>彙整本月人力、工時、休假與法遵風險。</p>
+        </div>
+        <div class="toolbar-actions">
+          <label class="field compact">
+            <span>員工</span>
+            <select id="employeeFilter"></select>
+          </label>
+          <label class="field compact">
+            <span>嚴重度</span>
+            <select id="severityFilter">
+              <option value="all">全部</option>
+              <option value="block">阻擋</option>
+              <option value="warn">警告</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="metrics" class="metrics"></div>
+      <div class="dashboard-grid">
+        <article class="section-block">
+          <h3>法遵警示</h3>
+          <div id="complianceList" class="list"></div>
+        </article>
+        <article class="section-block">
+          <h3>每日職務覆蓋</h3>
+          <div id="coverageList" class="list"></div>
+        </article>
+        <article class="section-block">
+          <h3>員工工時摘要</h3>
+          <div id="employeeSummary" class="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="admin" class="panel" aria-labelledby="admin-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="admin-title">資料維護</h2>
+          <p>先維護員工與班別模板，再用快速排班或月排班表指定日期。</p>
+        </div>
+      </div>
+      <div class="admin-grid">
+        <form id="employeeForm" class="section-block form">
+          <input name="id" type="hidden">
+          <h3 id="employeeFormTitle">新增員工</h3>
+          <label class="field"><span>姓名</span><input name="name" required></label>
+          <label class="field"><span>職稱</span><input name="title" required></label>
+          <label class="field"><span>聘用類型</span><select name="type"><option>正職</option><option>兼職</option></select></label>
+          <label class="field"><span>每週契約工時</span><input name="contractHours" type="number" min="1" max="40" value="40" required></label>
+          <label class="field"><span>到職日</span><input name="startDate" type="date" value="2025-01-01" required></label>
+          <label class="field"><span>門市/部門</span><input name="department" value="台南門市" required></label>
+          <div class="form-actions">
+            <button id="employeeSubmitBtn" class="button primary" type="submit">新增員工</button>
+            <button id="cancelEmployeeEditBtn" class="button secondary" type="button" hidden>取消編輯</button>
+          </div>
+        </form>
+        <form id="shiftForm" class="section-block form">
+          <input name="id" type="hidden">
+          <h3 id="shiftFormTitle">新增班別模板</h3>
+          <p class="form-hint">這裡只定義可重複使用的班別時間；日期請到「快速排班」或月排班格子指定。</p>
+          <label class="field"><span>名稱</span><input name="name" required></label>
+          <label class="field"><span>開始</span><input name="start" type="time" value="10:00" required></label>
+          <label class="field"><span>結束</span><input name="end" type="time" value="18:00" required></label>
+          <label class="field"><span>休息分鐘</span><input name="breakMinutes" type="number" min="0" value="60" required></label>
+          <label class="field"><span>需求職務</span><input name="role" value="專員" required></label>
+          <label class="field"><span>色彩</span><input name="color" type="color" value="#f6b73c"></label>
+          <div class="form-actions">
+            <button id="shiftSubmitBtn" class="button primary" type="submit">新增班別模板</button>
+            <button id="cancelShiftEditBtn" class="button secondary" type="button" hidden>取消編輯</button>
+          </div>
+        </form>
+        <form id="quickScheduleForm" class="section-block form">
+          <h3>快速排班</h3>
+          <label class="field"><span>員工</span><select name="employeeId" required></select></label>
+          <label class="field"><span>日期</span><input name="date" type="date" required></label>
+          <label class="field"><span>班別</span><select name="shiftIds" multiple size="5"></select></label>
+          <label class="field"><span>休假/標記</span>
+            <select name="leaveType">
+              <option value="">無</option>
+              <option value="休">休</option>
+              <option value="例假">例假</option>
+              <option value="休息日">休息日</option>
+              <option value="特休">特休</option>
+              <option value="請假">請假</option>
+              <option value="國定假日">國定假日</option>
+            </select>
+          </label>
+          <label class="field"><span>備註</span><textarea name="note" rows="2" placeholder="例如：支援、換班、補油"></textarea></label>
+          <button class="button primary" type="submit">套用到班表</button>
+        </form>
+        <article class="section-block">
+          <h3>目前員工</h3>
+          <div id="employeeList" class="list"></div>
+        </article>
+        <article class="section-block">
+          <h3>目前班別</h3>
+          <div id="shiftList" class="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="rules" class="panel" aria-labelledby="rules-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="rules-title">法遵規則</h2>
+          <p>第一版採一般工時。此系統提供管理警示，不取代個案法律意見。</p>
+        </div>
+      </div>
+      <div class="rules-grid">
+        <article class="rule-card"><strong>每日工時</strong><span>正常工時 8 小時內；含加班不得超過 12 小時。</span></article>
+        <article class="rule-card"><strong>每週工時</strong><span>正常工時每週 40 小時內；超過契約工時列警告。</span></article>
+        <article class="rule-card"><strong>一例一休</strong><span>每 7 日至少 1 日例假、1 日休息日；不得連續工作超過 6 日。</span></article>
+        <article class="rule-card"><strong>輪班間隔</strong><span>前班結束到下班開始少於 11 小時列警告。</span></article>
+        <article class="rule-card"><strong>班中休息</strong><span>連續工作超過 4 小時，需至少 30 分鐘休息。</span></article>
+        <article class="rule-card"><strong>國定假日</strong><span>第一版先標示與提醒人資確認給付或補休。</span></article>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="cellDialog" class="dialog">
+    <form method="dialog" id="cellForm">
+      <div class="dialog-header">
+        <h3 id="dialogTitle">編輯排班</h3>
+        <button class="icon-button" value="cancel" type="submit" aria-label="關閉">×</button>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>班別</span>
+          <select id="shiftSelect" multiple size="5"></select>
+        </label>
+        <label class="field">
+          <span>休假/標記</span>
+          <select id="leaveType">
+            <option value="">無</option>
+            <option value="休">休</option>
+            <option value="例假">例假</option>
+            <option value="休息日">休息日</option>
+            <option value="特休">特休</option>
+            <option value="請假">請假</option>
+            <option value="國定假日">國定假日</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>備註</span>
+          <textarea id="noteInput" rows="3" placeholder="例如：補油、理級支援、換班原因"></textarea>
+        </label>
+        <section class="cell-alert-panel" aria-live="polite">
+          <h4>本格警示</h4>
+          <div id="cellAlertDetails" class="cell-alert-details"></div>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <button id="clearCellBtn" class="button danger" type="button">清空</button>
+        <button class="button secondary" value="cancel" type="submit">取消</button>
+        <button id="saveCellBtn" class="button primary" type="button">儲存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
