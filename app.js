@@ -167,7 +167,8 @@ function renderSchedule() {
   const body = visibleEmployees.map((employee) => {
     const row = days.map((date) => renderCell(employee, date, compliance[cellKey(employee.id, date)] || []));
     const summary = renderSummaryCells(employee, days);
-    return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div></td>${row.join("")}${summary}</tr>`;
+    const hourPlan = getEmployeeMonthHourPlan(employee, days);
+    return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div><div class="employee-hours">已排 ${hourPlan.scheduled.toFixed(1)}h / 未排 ${hourPlan.remaining.toFixed(1)}h</div></td>${row.join("")}${summary}</tr>`;
   }).join("") || `<tr><td class="employee-cell">沒有符合條件的員工</td><td colspan="${days.length + summaryColumns.length}"></td></tr>`;
 
   table.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
@@ -194,6 +195,20 @@ function getEmployeeMonthSummary(employeeId, days) {
     if (cell.shifts.length) counts.workDays += 1;
   });
   return counts;
+}
+
+function getEmployeeMonthHourPlan(employee, days) {
+  const scheduled = days.reduce((sum, date) => {
+    const cell = state.schedule[cellKey(employee.id, date)] || emptyCell();
+    return sum + cell.shifts.map(getShift).filter(Boolean).reduce((shiftSum, shift) => shiftSum + workHours(shift), 0);
+  }, 0);
+  const monthWeeks = days.length / 7;
+  const target = employee.contractHours * monthWeeks;
+  return {
+    scheduled,
+    target,
+    remaining: Math.max(0, target - scheduled)
+  };
 }
 
 function renderCell(employee, date, alerts) {

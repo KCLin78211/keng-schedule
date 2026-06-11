@@ -329,6 +329,16 @@ p {
   margin-top: 4px;
 }
 
+.employee-hours {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  color: var(--brand-2);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .day-cell {
   width: 82px;
   min-width: 82px;
@@ -760,6 +770,10 @@ p {
   }
 
   .mobile-view-matrix .employee-meta {
+    font-size: 11px;
+  }
+
+  .mobile-view-matrix .employee-hours {
     font-size: 11px;
   }
 
