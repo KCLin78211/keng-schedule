@@ -24,8 +24,14 @@ const state = {
   ],
   schedule: {},
   leaveRecords: [],
+  leaveBalances: [
+    { id: "lb1", employeeId: "e1", year: 2026, annualLeaveDays: 10, expiresAt: "2026-12-31", note: "" },
+    { id: "lb2", employeeId: "e2", year: 2026, annualLeaveDays: 14, expiresAt: "2026-12-31", note: "" },
+    { id: "lb3", employeeId: "e3", year: 2026, annualLeaveDays: 7, expiresAt: "2026-12-31", note: "" }
+  ],
   editingEmployeeId: null,
-  editingShiftId: null
+  editingShiftId: null,
+  editingLeaveBalanceId: null
 };
 
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
@@ -74,8 +80,10 @@ function bindEvents() {
   document.getElementById("employeeForm").addEventListener("submit", addEmployee);
   document.getElementById("shiftForm").addEventListener("submit", addShift);
   document.getElementById("quickScheduleForm").addEventListener("submit", applyQuickSchedule);
+  document.getElementById("leaveBalanceForm").addEventListener("submit", saveLeaveBalance);
   document.getElementById("cancelEmployeeEditBtn").addEventListener("click", resetEmployeeForm);
   document.getElementById("cancelShiftEditBtn").addEventListener("click", resetShiftForm);
+  document.getElementById("cancelLeaveBalanceEditBtn").addEventListener("click", resetLeaveBalanceForm);
 }
 
 function seedSchedule() {
@@ -286,8 +294,21 @@ function openDialog(employeeId, date) {
   });
   document.getElementById("leaveType").value = cell.leaveType;
   document.getElementById("noteInput").value = cell.note;
+  renderCellLeaveBalance(employeeId, date);
   renderCellAlertDetails(cellAlerts);
   document.getElementById("cellDialog").showModal();
+}
+
+function renderCellLeaveBalance(employeeId, date) {
+  const year = Number(date.slice(0, 4));
+  const balance = state.leaveBalances.find((item) => item.employeeId === employeeId && item.year === year);
+  const box = document.getElementById("cellLeaveBalanceDetails");
+  if (!balance) {
+    box.innerHTML = `<div class="cell-alert-empty">此員工尚未設定 ${year} 年特休額度。</div>`;
+    return;
+  }
+  const usage = getAnnualLeaveUsage(balance);
+  box.innerHTML = `<div class="cell-alert-empty">可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天 / 期限 ${escapeHtml(balance.expiresAt)}</div>`;
 }
 
 function renderCellAlertDetails(alerts) {
@@ -389,6 +410,11 @@ function populateDialogOptions() {
   if (!quickScheduleForm.elements.date.value) {
     quickScheduleForm.elements.date.value = `${state.month}-01`;
   }
+
+  const leaveBalanceForm = document.getElementById("leaveBalanceForm");
+  leaveBalanceForm.elements.employeeId.innerHTML = activeEmployees.map((employee) => (
+    `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
+  )).join("");
 }
 
 function renderDashboard() {
@@ -398,6 +424,10 @@ function renderDashboard() {
   const selectedEmployee = document.getElementById("employeeFilter").value || "all";
   const selectedSeverity = document.getElementById("severityFilter").value || "all";
   const visibleCompliance = compliance.filter((item) => (
+    (selectedEmployee === "all" || item.employeeId === selectedEmployee) &&
+    (selectedSeverity === "all" || item.severity === selectedSeverity)
+  ));
+  const leaveWarnings = getLeaveBalanceWarnings().filter((item) => (
     (selectedEmployee === "all" || item.employeeId === selectedEmployee) &&
     (selectedSeverity === "all" || item.severity === selectedSeverity)
   ));
@@ -421,8 +451,12 @@ function renderDashboard() {
     metric("休假/請假", `${leaveCount} 天`)
   ].join("");
 
-  document.getElementById("complianceList").innerHTML = visibleCompliance.length
-    ? visibleCompliance.map(renderComplianceItem).join("")
+  const warningItems = [
+    ...visibleCompliance.map(renderComplianceItem),
+    ...leaveWarnings.map(renderLeaveWarningItem)
+  ];
+  document.getElementById("complianceList").innerHTML = warningItems.length
+    ? warningItems.join("")
     : `<div class="list-item severity-ok"><strong>目前沒有符合篩選條件的警示</strong><span>可切換月份或調整排班後重新檢視。</span></div>`;
 
   document.getElementById("coverageList").innerHTML = days.map(renderCoverageItem).join("");
@@ -442,6 +476,49 @@ function renderComplianceItem(item) {
   return `<div class="list-item severity-${item.severity}"><strong>${employee.name} · ${item.scope} · ${item.code}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
 }
 
+function renderLeaveWarningItem(item) {
+  const employee = state.employees.find((entry) => entry.id === item.employeeId);
+  return `<div class="list-item severity-${item.severity}"><strong>${escapeHtml(employee?.name || "未指定員工")} · 特休 · ${escapeHtml(item.code)}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
+}
+
+function getLeaveBalanceWarnings() {
+  return state.leaveBalances.flatMap((balance) => {
+    const usage = getAnnualLeaveUsage(balance);
+    const expiry = new Date(`${balance.expiresAt}T00:00:00`);
+    const today = new Date();
+    const daysLeft = Math.ceil((expiry - today) / MS_PER_DAY);
+    const warnings = [];
+    if (usage.remaining <= 0) {
+      warnings.push({
+        employeeId: balance.employeeId,
+        severity: "warn",
+        code: "LEAVE_USED_UP",
+        message: `${balance.year} 年特休已無剩餘天數。`,
+        suggestion: "若仍需排特休，請先確認是否有展延或人工調整額度。"
+      });
+    }
+    if (usage.remaining > 0 && daysLeft >= 0 && daysLeft <= 30) {
+      warnings.push({
+        employeeId: balance.employeeId,
+        severity: "warn",
+        code: "LEAVE_EXPIRING",
+        message: `剩餘 ${formatDays(usage.remaining)} 天特休將於 ${balance.expiresAt} 到期。`,
+        suggestion: "提醒員工安排特休或由人資確認是否展延。"
+      });
+    }
+    if (daysLeft < 0 && usage.remaining > 0) {
+      warnings.push({
+        employeeId: balance.employeeId,
+        severity: "block",
+        code: "LEAVE_EXPIRED",
+        message: `${balance.year} 年特休已於 ${balance.expiresAt} 到期，仍有 ${formatDays(usage.remaining)} 天未使用。`,
+        suggestion: "請由人資確認是否結清、展延或調整額度。"
+      });
+    }
+    return warnings;
+  });
+}
+
 function renderCoverageItem(date) {
   const requirements = ["主任", "專員", "早計", "晚計"];
   const workingTitles = new Set(state.employees.flatMap((employee) => {
@@ -455,11 +532,14 @@ function renderCoverageItem(date) {
 
 function renderAdmin() {
   document.getElementById("employeeList").innerHTML = state.employees.map((employee) => (
-    `<div class="list-item"><strong>${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</strong><span>${employee.type} · ${employee.policy} · ${employee.contractHours}h/週 · ${escapeHtml(employee.department)}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-employee="${employee.id}">編輯</button><button class="button danger" type="button" data-delete-employee="${employee.id}">刪除</button></div></div>`
+    `<div class="list-item"><strong>${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</strong><span>${employee.type} · ${employee.policy} · ${employee.contractHours}h/週 · ${escapeHtml(employee.department)}</span><span>${escapeHtml(getLeaveBalanceSummaryText(employee.id))}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-employee="${employee.id}">編輯</button><button class="button danger" type="button" data-delete-employee="${employee.id}">刪除</button></div></div>`
   )).join("");
   document.getElementById("shiftList").innerHTML = state.shifts.map((shift) => (
     `<div class="list-item"><strong><i class="swatch" style="background:${shift.color}"></i> ${escapeHtml(shift.name)}</strong><span>${shift.start}-${shift.end} · 休息 ${shift.breakMinutes} 分 · ${workHours(shift).toFixed(1)}h · ${escapeHtml(shift.role)}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-shift="${shift.id}">編輯</button><button class="button danger" type="button" data-delete-shift="${shift.id}">刪除</button></div></div>`
   )).join("");
+  document.getElementById("leaveBalanceList").innerHTML = state.leaveBalances.length
+    ? state.leaveBalances.map(renderLeaveBalanceItem).join("")
+    : `<div class="list-item"><strong>尚未建立特休額度</strong><span>新增後會自動依排班格中的「特休」統計已用與剩餘天數。</span></div>`;
   document.querySelectorAll("[data-edit-employee]").forEach((button) => {
     button.addEventListener("click", () => editEmployee(button.dataset.editEmployee));
   });
@@ -472,6 +552,19 @@ function renderAdmin() {
   document.querySelectorAll("[data-delete-shift]").forEach((button) => {
     button.addEventListener("click", () => deleteShift(button.dataset.deleteShift));
   });
+  document.querySelectorAll("[data-edit-leave-balance]").forEach((button) => {
+    button.addEventListener("click", () => editLeaveBalance(button.dataset.editLeaveBalance));
+  });
+  document.querySelectorAll("[data-delete-leave-balance]").forEach((button) => {
+    button.addEventListener("click", () => deleteLeaveBalance(button.dataset.deleteLeaveBalance));
+  });
+}
+
+function renderLeaveBalanceItem(balance) {
+  const employee = state.employees.find((item) => item.id === balance.employeeId);
+  const usage = getAnnualLeaveUsage(balance);
+  const expiryClass = getLeaveExpiryClass(balance.expiresAt);
+  return `<div class="list-item ${expiryClass}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${balance.year} 年特休</strong><span>可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天</span><span>期限：${escapeHtml(balance.expiresAt)}${balance.note ? ` · ${escapeHtml(balance.note)}` : ""}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-leave-balance="${balance.id}">編輯</button><button class="button danger" type="button" data-delete-leave-balance="${balance.id}">刪除</button></div></div>`;
 }
 
 function addEmployee(event) {
@@ -548,6 +641,7 @@ function deleteEmployee(id) {
   if (!employee) return;
   if (!confirm(`確定刪除 ${employee.name}？此員工的本機排班資料也會移除。`)) return;
   state.employees = state.employees.filter((item) => item.id !== id);
+  state.leaveBalances = state.leaveBalances.filter((item) => item.employeeId !== id);
   Object.keys(state.schedule).forEach((key) => {
     if (key.includes(`:${id}:`)) delete state.schedule[key];
   });
@@ -611,6 +705,104 @@ function resetShiftForm() {
   document.getElementById("shiftFormTitle").textContent = "新增班別";
   document.getElementById("shiftSubmitBtn").textContent = "新增班別";
   document.getElementById("cancelShiftEditBtn").hidden = true;
+}
+
+function saveLeaveBalance(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const id = formData.get("id") || `lb${Date.now()}`;
+  const balanceData = {
+    id,
+    employeeId: formData.get("employeeId"),
+    year: Number(formData.get("year")),
+    annualLeaveDays: Number(formData.get("annualLeaveDays")),
+    expiresAt: formData.get("expiresAt"),
+    note: formData.get("note").trim()
+  };
+  const existingIndex = state.leaveBalances.findIndex((balance) => balance.id === id);
+  if (existingIndex >= 0) {
+    state.leaveBalances[existingIndex] = balanceData;
+  } else {
+    state.leaveBalances.push(balanceData);
+  }
+  resetLeaveBalanceForm();
+  renderAll();
+}
+
+function editLeaveBalance(id) {
+  const balance = state.leaveBalances.find((item) => item.id === id);
+  if (!balance) return;
+  const form = document.getElementById("leaveBalanceForm");
+  form.elements.id.value = balance.id;
+  form.elements.employeeId.value = balance.employeeId;
+  form.elements.year.value = balance.year;
+  form.elements.annualLeaveDays.value = balance.annualLeaveDays;
+  form.elements.expiresAt.value = balance.expiresAt;
+  form.elements.note.value = balance.note || "";
+  state.editingLeaveBalanceId = id;
+  document.getElementById("leaveBalanceFormTitle").textContent = "修改特休額度";
+  document.getElementById("leaveBalanceSubmitBtn").textContent = "儲存修改";
+  document.getElementById("cancelLeaveBalanceEditBtn").hidden = false;
+}
+
+function deleteLeaveBalance(id) {
+  const balance = state.leaveBalances.find((item) => item.id === id);
+  if (!balance) return;
+  if (!confirm("確定刪除此特休額度？排班格中的特休標記不會被刪除。")) return;
+  state.leaveBalances = state.leaveBalances.filter((item) => item.id !== id);
+  if (state.editingLeaveBalanceId === id) resetLeaveBalanceForm();
+  renderAll();
+}
+
+function resetLeaveBalanceForm() {
+  const form = document.getElementById("leaveBalanceForm");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.year.value = Number(state.month.slice(0, 4));
+  form.elements.annualLeaveDays.value = 7;
+  form.elements.expiresAt.value = `${state.month.slice(0, 4)}-12-31`;
+  form.elements.note.value = "";
+  state.editingLeaveBalanceId = null;
+  document.getElementById("leaveBalanceFormTitle").textContent = "新增特休額度";
+  document.getElementById("leaveBalanceSubmitBtn").textContent = "新增特休額度";
+  document.getElementById("cancelLeaveBalanceEditBtn").hidden = true;
+}
+
+function getLeaveBalanceSummaryText(employeeId) {
+  const year = Number(state.month.slice(0, 4));
+  const balance = state.leaveBalances.find((item) => item.employeeId === employeeId && item.year === year);
+  if (!balance) return "特休：未設定";
+  const usage = getAnnualLeaveUsage(balance);
+  return `特休：剩 ${formatDays(usage.remaining)} 天，期限 ${balance.expiresAt}`;
+}
+
+function getAnnualLeaveUsage(balance) {
+  const used = Object.keys(state.schedule).reduce((sum, key) => {
+    const parts = key.split(":");
+    const employeeId = parts[1];
+    const date = parts[2];
+    const cell = state.schedule[key];
+    if (employeeId !== balance.employeeId || !date.startsWith(`${balance.year}-`)) return sum;
+    return sum + (cell.leaveType === "特休" ? 1 : 0);
+  }, 0);
+  return {
+    used,
+    remaining: Math.max(0, balance.annualLeaveDays - used)
+  };
+}
+
+function getLeaveExpiryClass(expiresAt) {
+  const today = new Date();
+  const expiry = new Date(`${expiresAt}T00:00:00`);
+  const daysLeft = Math.ceil((expiry - today) / MS_PER_DAY);
+  if (daysLeft < 0) return "severity-block";
+  if (daysLeft <= 30) return "severity-warn";
+  return "severity-ok";
+}
+
+function formatDays(value) {
+  return Number(value).toFixed(1).replace(/\\.0$/, "");
 }
 
 function runCompliance() {

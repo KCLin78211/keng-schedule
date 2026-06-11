@@ -390,7 +390,8 @@ p {
   font-weight: 700;
 }
 
-.cell-alert-panel {
+.cell-alert-panel,
+.leave-balance-panel {
   display: grid;
   gap: 8px;
   padding: 12px;
@@ -399,7 +400,12 @@ p {
   background: var(--surface-2);
 }
 
-.cell-alert-panel h4 {
+.leave-balance-panel {
+  background: #fff8df;
+}
+
+.cell-alert-panel h4,
+.leave-balance-panel h4 {
   margin: 0;
   font-size: 15px;
 }
@@ -487,6 +493,10 @@ p {
 
 .admin-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.leave-management-block {
+  grid-column: span 2;
 }
 
 .rules-grid {
@@ -625,6 +635,10 @@ p {
   .admin-grid,
   .rules-grid {
     grid-template-columns: 1fr;
+  }
+
+  .leave-management-block {
+    grid-column: auto;
   }
 
   .schedule-wrap {
