@@ -152,11 +152,11 @@ function renderTabs() {
 }
 
 function enforceRoleDefaults() {
-  const canSeeRestricted = canAccessRestrictedViews();
-  document.querySelector('[data-tab="dashboard"]').hidden = !canSeeRestricted;
-  document.querySelector('[data-tab="admin"]').hidden = !canSeeRestricted;
+  const canSeeAdmin = canAccessAdminViews();
+  document.querySelector('[data-tab="dashboard"]').hidden = false;
+  document.querySelector('[data-tab="admin"]').hidden = !canSeeAdmin;
   document.getElementById("currentEmployeeField").hidden = state.roleView !== "employee";
-  if (!canSeeRestricted && (state.activeTab === "dashboard" || state.activeTab === "admin")) {
+  if (!canSeeAdmin && state.activeTab === "admin") {
     state.activeTab = "schedule";
   }
   if (state.roleView === "employee") {
@@ -164,7 +164,7 @@ function enforceRoleDefaults() {
   }
 }
 
-function canAccessRestrictedViews() {
+function canAccessAdminViews() {
   return state.roleView === "hr" || state.roleView === "admin";
 }
 
@@ -459,10 +459,18 @@ function populateDialogOptions() {
 
   const employeeFilter = document.getElementById("employeeFilter");
   const current = employeeFilter.value || "all";
-  employeeFilter.innerHTML = `<option value="all">全部</option>` + activeEmployees.map((employee) => (
-    `<option value="${employee.id}">${escapeHtml(employee.name)}</option>`
-  )).join("");
-  employeeFilter.value = canSeeAllEmployees() && activeEmployees.some((employee) => employee.id === current) ? current : "all";
+  if (canSeeAllEmployees()) {
+    employeeFilter.disabled = false;
+    employeeFilter.innerHTML = `<option value="all">全部</option>` + activeEmployees.map((employee) => (
+      `<option value="${employee.id}">${escapeHtml(employee.name)}</option>`
+    )).join("");
+    employeeFilter.value = activeEmployees.some((employee) => employee.id === current) ? current : "all";
+  } else {
+    employeeFilter.disabled = true;
+    const employee = activeEmployees.find((item) => item.id === state.currentEmployeeId);
+    employeeFilter.innerHTML = `<option value="${state.currentEmployeeId}">${escapeHtml(employee?.name || "我的資訊")}</option>`;
+    employeeFilter.value = state.currentEmployeeId;
+  }
 
   const quickScheduleForm = document.getElementById("quickScheduleForm");
   quickScheduleForm.elements.employeeId.innerHTML = activeEmployees.map((employee) => (
@@ -529,6 +537,21 @@ function renderDashboard() {
     const severity = total.hours > employee.contractHours * 4 ? "severity-warn" : "severity-ok";
     return `<div class="list-item ${severity}"><strong>${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</strong><span>${total.hours.toFixed(1)}h / ${total.workDays} 出勤日 / ${total.leaveDays} 休假標記</span></div>`;
   }).join("");
+  renderDashboardLeaveSummary(dashboardEmployees);
+}
+
+function renderDashboardLeaveSummary(employees) {
+  const year = Number(state.month.slice(0, 4));
+  const employeeIds = new Set(employees.map((employee) => employee.id));
+  const balances = state.leaveBalances.filter((balance) => balance.year === year && employeeIds.has(balance.employeeId));
+  document.getElementById("dashboardLeaveSummary").innerHTML = balances.length
+    ? balances.map((balance) => {
+      const employee = state.employees.find((item) => item.id === balance.employeeId);
+      const usage = getAnnualLeaveUsage(balance);
+      const usedDates = usage.dates.length ? formatUsedDates(usage.dates) : "尚無";
+      return `<div class="list-item ${getLeaveExpiryClass(balance.expiresAt)}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${year} 年特休</strong><span>可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天</span><span>已用日期：${escapeHtml(usedDates)}</span><span>期限：${escapeHtml(balance.expiresAt)}</span></div>`;
+    }).join("")
+    : `<div class="list-item"><strong>尚未設定特休額度</strong><span>請由人資在資料維護建立年度特休額度。</span></div>`;
 }
 
 function metric(label, value) {
