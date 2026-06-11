@@ -308,7 +308,8 @@ function renderCellLeaveBalance(employeeId, date) {
     return;
   }
   const usage = getAnnualLeaveUsage(balance);
-  box.innerHTML = `<div class="cell-alert-empty">可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天 / 期限 ${escapeHtml(balance.expiresAt)}</div>`;
+  const usedDates = usage.dates.length ? `已用日期：${escapeHtml(formatUsedDates(usage.dates))}` : "已用日期：尚無";
+  box.innerHTML = `<div class="cell-alert-empty">可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天 / 期限 ${escapeHtml(balance.expiresAt)}<br>${usedDates}</div>`;
 }
 
 function renderCellAlertDetails(alerts) {
@@ -564,7 +565,8 @@ function renderLeaveBalanceItem(balance) {
   const employee = state.employees.find((item) => item.id === balance.employeeId);
   const usage = getAnnualLeaveUsage(balance);
   const expiryClass = getLeaveExpiryClass(balance.expiresAt);
-  return `<div class="list-item ${expiryClass}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${balance.year} 年特休</strong><span>可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天</span><span>期限：${escapeHtml(balance.expiresAt)}${balance.note ? ` · ${escapeHtml(balance.note)}` : ""}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-leave-balance="${balance.id}">編輯</button><button class="button danger" type="button" data-delete-leave-balance="${balance.id}">刪除</button></div></div>`;
+  const usedDates = usage.dates.length ? formatUsedDates(usage.dates) : "尚無";
+  return `<div class="list-item ${expiryClass}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${balance.year} 年特休</strong><span>可用 ${formatDays(balance.annualLeaveDays)} 天 / 已用 ${formatDays(usage.used)} 天 / 剩餘 ${formatDays(usage.remaining)} 天</span><span>已用日期：${escapeHtml(usedDates)}</span><span>期限：${escapeHtml(balance.expiresAt)}${balance.note ? ` · ${escapeHtml(balance.note)}` : ""}</span><div class="item-actions"><button class="button secondary" type="button" data-edit-leave-balance="${balance.id}">編輯</button><button class="button danger" type="button" data-delete-leave-balance="${balance.id}">刪除</button></div></div>`;
 }
 
 function addEmployee(event) {
@@ -778,18 +780,26 @@ function getLeaveBalanceSummaryText(employeeId) {
 }
 
 function getAnnualLeaveUsage(balance) {
-  const used = Object.keys(state.schedule).reduce((sum, key) => {
+  const dates = [];
+  Object.keys(state.schedule).forEach((key) => {
     const parts = key.split(":");
     const employeeId = parts[1];
     const date = parts[2];
     const cell = state.schedule[key];
-    if (employeeId !== balance.employeeId || !date.startsWith(`${balance.year}-`)) return sum;
-    return sum + (cell.leaveType === "特休" ? 1 : 0);
-  }, 0);
+    if (employeeId !== balance.employeeId || !date.startsWith(`${balance.year}-`)) return;
+    if (cell.leaveType === "特休") dates.push(date);
+  });
+  dates.sort();
+  const used = dates.length;
   return {
+    dates,
     used,
     remaining: Math.max(0, balance.annualLeaveDays - used)
   };
+}
+
+function formatUsedDates(dates) {
+  return dates.map((date) => date.slice(5).replace("-", "/")).join("、");
 }
 
 function getLeaveExpiryClass(expiresAt) {
