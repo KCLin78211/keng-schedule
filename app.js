@@ -29,6 +29,12 @@ const state = {
 };
 
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+const summaryColumns = [
+  { key: "sick", label: "病", leaveType: "病" },
+  { key: "personal", label: "事", leaveType: "事" },
+  { key: "official", label: "公", leaveType: "公" },
+  { key: "workDays", label: "出勤" }
+];
 const holidayDates = new Set(["2026-06-19"]);
 
 function init() {
@@ -154,19 +160,40 @@ function renderSchedule() {
       const weekend = d.getDay() === 0 || d.getDay() === 6;
       return `<th class="date-head ${weekend ? "weekend" : ""}">${d.getDate()}<span class="weekday">${weekdays[d.getDay()]}</span></th>`;
     }),
+    ...summaryColumns.map((column) => `<th class="summary-head">${column.label}</th>`),
     `</tr>`
   ].join("");
 
   const body = visibleEmployees.map((employee) => {
     const row = days.map((date) => renderCell(employee, date, compliance[cellKey(employee.id, date)] || []));
-    return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div></td>${row.join("")}</tr>`;
-  }).join("") || `<tr><td class="employee-cell">沒有符合條件的員工</td><td colspan="${days.length}"></td></tr>`;
+    const summary = renderSummaryCells(employee, days);
+    return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div></td>${row.join("")}${summary}</tr>`;
+  }).join("") || `<tr><td class="employee-cell">沒有符合條件的員工</td><td colspan="${days.length + summaryColumns.length}"></td></tr>`;
 
   table.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
   table.querySelectorAll(".day-cell").forEach((cell) => {
     cell.addEventListener("click", () => handleCellClick(cell.dataset.employeeId, cell.dataset.date));
   });
   renderMobileSchedule(days, visibleEmployees, compliance);
+}
+
+function renderSummaryCells(employee, days) {
+  const counts = getEmployeeMonthSummary(employee.id, days);
+  return summaryColumns.map((column) => (
+    `<td class="summary-cell">${counts[column.key] || ""}</td>`
+  )).join("");
+}
+
+function getEmployeeMonthSummary(employeeId, days) {
+  const counts = { sick: 0, personal: 0, official: 0, workDays: 0 };
+  days.forEach((date) => {
+    const cell = state.schedule[cellKey(employeeId, date)] || emptyCell();
+    if (cell.leaveType === "病") counts.sick += 1;
+    if (cell.leaveType === "事") counts.personal += 1;
+    if (cell.leaveType === "公") counts.official += 1;
+    if (cell.shifts.length) counts.workDays += 1;
+  });
+  return counts;
 }
 
 function renderCell(employee, date, alerts) {
@@ -369,14 +396,14 @@ function renderDashboard() {
     return sum + Math.max(0, total.hours - total.contractHours * 4);
   }, 0);
   const leaveCount = dashboardEmployees.reduce((sum, employee) => (
-    sum + days.filter((date) => ["特休", "請假"].includes((state.schedule[cellKey(employee.id, date)] || emptyCell()).leaveType)).length
+    sum + days.filter((date) => ["特休", "請假", "病", "事", "公"].includes((state.schedule[cellKey(employee.id, date)] || emptyCell()).leaveType)).length
   ), 0);
 
   document.getElementById("metrics").innerHTML = [
     metric("本月總工時", `${monthHours.toFixed(1)}h`),
     metric("阻擋警示", compliance.filter((item) => item.severity === "block").length),
     metric("加班風險", `${overtimeRisk.toFixed(1)}h`),
-    metric("特休/請假", `${leaveCount} 天`)
+    metric("休假/請假", `${leaveCount} 天`)
   ].join("");
 
   document.getElementById("complianceList").innerHTML = visibleCompliance.length
@@ -684,8 +711,9 @@ function groupByCell(results) {
 
 function exportCsv() {
   const days = getDaysInMonth(state.month);
-  const rows = [["姓名", "職稱", ...days]];
+  const rows = [["姓名", "職稱", ...days, ...summaryColumns.map((column) => column.label)]];
   state.employees.forEach((employee) => {
+    const summary = getEmployeeMonthSummary(employee.id, days);
     rows.push([
       employee.name,
       employee.title,
@@ -696,7 +724,8 @@ function exportCsv() {
           return shift ? `${shift.name} ${shift.start}-${shift.end}` : "";
         }).filter(Boolean).join(" / ");
         return [cell.leaveType, shiftText, cell.note].filter(Boolean).join(" ");
-      })
+      }),
+      ...summaryColumns.map((column) => summary[column.key] || "")
     ]);
   });
   rows.push([]);

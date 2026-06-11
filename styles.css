@@ -290,6 +290,23 @@ p {
   background: #f5bd35;
 }
 
+.summary-head {
+  background: #fff36a !important;
+  color: #1f2a24;
+  font-weight: 800;
+  min-width: 48px !important;
+}
+
+.summary-cell {
+  width: 52px;
+  min-width: 52px;
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: middle !important;
+  font-weight: 800;
+  background: #fffef0;
+}
+
 .weekday {
   display: block;
   color: var(--muted);
@@ -718,6 +735,13 @@ p {
   .mobile-view-matrix .schedule-table th {
     min-width: 56px;
     padding: 6px 4px;
+    font-size: 12px;
+  }
+
+  .mobile-view-matrix .summary-head,
+  .mobile-view-matrix .summary-cell {
+    min-width: 44px !important;
+    width: 44px;
     font-size: 12px;
   }
 
