@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>耕讀園排班與人資系統</title>
-  <link rel="stylesheet" href="styles.css?v=20260611-dashboard">
+  <link rel="stylesheet" href="styles.css?v=20260611-copy-cell">
 </head>
 <body>
   <header class="app-header">
@@ -66,8 +66,9 @@
           </label>
           <label class="toggle">
             <input id="copyMode" type="checkbox">
-            <span>套用已複製格</span>
+            <span id="copyModeLabel">貼上模式</span>
           </label>
+          <span id="copyStatus" class="copy-status">尚未複製任何格</span>
         </div>
       </div>
       <div class="legend" id="legend"></div>
@@ -265,12 +266,13 @@
       </div>
       <div class="dialog-actions">
         <button id="clearCellBtn" class="button danger" type="button">清空</button>
+        <button id="copyCellBtn" class="button secondary" type="button">複製此格</button>
         <button class="button secondary" value="cancel" type="submit">取消</button>
         <button id="saveCellBtn" class="button primary" type="button">儲存</button>
       </div>
     </form>
   </dialog>
 
-  <script src="app.js?v=20260611-dashboard"></script>
+  <script src="app.js?v=20260611-copy-cell"></script>
 </body>
 </html>

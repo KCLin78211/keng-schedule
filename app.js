@@ -89,6 +89,8 @@ function bindEvents() {
   document.getElementById("severityFilter").addEventListener("change", renderDashboard);
   document.getElementById("saveCellBtn").addEventListener("click", saveDialogCell);
   document.getElementById("clearCellBtn").addEventListener("click", clearDialogCell);
+  document.getElementById("copyCellBtn").addEventListener("click", copyDialogCell);
+  document.getElementById("copyMode").addEventListener("change", renderCopyStatus);
   document.getElementById("employeeForm").addEventListener("submit", addEmployee);
   document.getElementById("shiftForm").addEventListener("submit", addShift);
   document.getElementById("quickScheduleForm").addEventListener("submit", applyQuickSchedule);
@@ -142,6 +144,7 @@ function renderAll() {
   renderSchedule();
   renderDashboard();
   renderAdmin();
+  renderCopyStatus();
 }
 
 function renderTabs() {
@@ -170,6 +173,30 @@ function canAccessAdminViews() {
 
 function canSeeAllEmployees() {
   return state.roleView === "hr" || state.roleView === "admin" || state.roleView === "manager";
+}
+
+function canEditSchedule() {
+  return state.roleView !== "employee";
+}
+
+function renderCopyStatus() {
+  const copyMode = document.getElementById("copyMode");
+  const copyStatus = document.getElementById("copyStatus");
+  const copyToggle = copyMode?.closest(".toggle");
+  if (!copyMode || !copyStatus || !copyToggle) return;
+
+  const canEdit = canEditSchedule();
+  copyMode.disabled = !canEdit;
+  copyToggle.hidden = !canEdit;
+  copyStatus.hidden = !canEdit;
+  if (!canEdit) return;
+
+  if (!state.copiedCell) {
+    copyMode.checked = false;
+    copyStatus.textContent = "尚未複製任何格";
+    return;
+  }
+  copyStatus.textContent = copyMode.checked ? "已複製，點其他日期格可貼上" : "已複製，勾選貼上模式後可貼上";
 }
 
 function applyMobileScheduleView() {
@@ -309,14 +336,13 @@ function renderMobileSchedule(days, visibleEmployees, compliance) {
 
 function handleCellClick(employeeId, date) {
   const key = cellKey(employeeId, date);
-  if (document.getElementById("copyMode").checked && state.copiedCell) {
+  if (canEditSchedule() && document.getElementById("copyMode").checked && state.copiedCell) {
     state.schedule[key] = cloneCell(state.copiedCell);
     state.schedule[key].updatedBy = state.roleView;
     renderAll();
     return;
   }
   state.selectedCell = { employeeId, date };
-  state.copiedCell = cloneCell(state.schedule[key] || emptyCell());
   openDialog(employeeId, date);
 }
 
@@ -342,6 +368,7 @@ function setCellDialogEditMode(canEdit) {
   document.getElementById("noteInput").disabled = !canEdit;
   document.getElementById("saveCellBtn").hidden = !canEdit;
   document.getElementById("clearCellBtn").hidden = !canEdit;
+  document.getElementById("copyCellBtn").hidden = !canEdit;
 }
 
 function renderCellLeaveBalance(employeeId, date) {
@@ -370,17 +397,35 @@ function renderCellAlertDetails(alerts) {
 
 function saveDialogCell() {
   if (!state.selectedCell) return;
-  const selectedShifts = Array.from(document.getElementById("shiftSelect").selectedOptions).map((option) => option.value);
   const role = state.roleView;
   state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] = {
-    shifts: selectedShifts,
-    leaveType: document.getElementById("leaveType").value,
-    note: document.getElementById("noteInput").value.trim(),
+    ...getDialogCellValue(),
     createdBy: role,
     updatedBy: role
   };
   document.getElementById("cellDialog").close();
   renderAll();
+}
+
+function getDialogCellValue() {
+  const selectedShifts = Array.from(document.getElementById("shiftSelect").selectedOptions).map((option) => option.value);
+  return {
+    shifts: selectedShifts,
+    leaveType: document.getElementById("leaveType").value,
+    note: document.getElementById("noteInput").value.trim()
+  };
+}
+
+function copyDialogCell() {
+  if (!state.selectedCell || !canEditSchedule()) return;
+  state.copiedCell = {
+    ...getDialogCellValue(),
+    createdBy: state.roleView,
+    updatedBy: state.roleView
+  };
+  document.getElementById("copyMode").checked = true;
+  renderCopyStatus();
+  document.getElementById("cellDialog").close();
 }
 
 function clearDialogCell() {

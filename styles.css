@@ -205,6 +205,11 @@ p {
   border-radius: 6px;
 }
 
+.copy-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .legend {
   display: flex;
   gap: 8px;
