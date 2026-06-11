@@ -2,6 +2,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const state = {
   month: "2026-06",
   activeTab: "schedule",
+  roleView: "employee",
+  currentEmployeeId: "e1",
   selectedCell: null,
   copiedCell: null,
   scheduleEmployeeFilter: "all",
@@ -60,6 +62,16 @@ function bindEvents() {
   document.getElementById("monthPicker").addEventListener("change", (event) => {
     state.month = event.target.value;
     seedSchedule();
+    renderAll();
+  });
+  document.getElementById("roleView").addEventListener("change", (event) => {
+    state.roleView = event.target.value;
+    enforceRoleDefaults();
+    renderAll();
+  });
+  document.getElementById("currentEmployeeSelect").addEventListener("change", (event) => {
+    state.currentEmployeeId = event.target.value;
+    enforceRoleDefaults();
     renderAll();
   });
 
@@ -133,9 +145,31 @@ function renderAll() {
 }
 
 function renderTabs() {
+  enforceRoleDefaults();
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === state.activeTab));
   document.querySelectorAll(".panel").forEach((panel) => panel.classList.toggle("active", panel.id === state.activeTab));
   applyMobileScheduleView();
+}
+
+function enforceRoleDefaults() {
+  const canSeeRestricted = canAccessRestrictedViews();
+  document.querySelector('[data-tab="dashboard"]').hidden = !canSeeRestricted;
+  document.querySelector('[data-tab="admin"]').hidden = !canSeeRestricted;
+  document.getElementById("currentEmployeeField").hidden = state.roleView !== "employee";
+  if (!canSeeRestricted && (state.activeTab === "dashboard" || state.activeTab === "admin")) {
+    state.activeTab = "schedule";
+  }
+  if (state.roleView === "employee") {
+    state.scheduleEmployeeFilter = state.currentEmployeeId;
+  }
+}
+
+function canAccessRestrictedViews() {
+  return state.roleView === "hr" || state.roleView === "admin";
+}
+
+function canSeeAllEmployees() {
+  return state.roleView === "hr" || state.roleView === "admin" || state.roleView === "manager";
 }
 
 function applyMobileScheduleView() {
@@ -159,7 +193,9 @@ function renderSchedule() {
   const days = getDaysInMonth(state.month);
   const compliance = groupByCell(runCompliance());
   const visibleEmployees = state.employees.filter((employee) => (
-    employee.active && (state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter)
+    employee.active && (canSeeAllEmployees()
+      ? (state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter)
+      : employee.id === state.currentEmployeeId)
   ));
   const head = [
     `<tr><th class="employee-head">姓名 / 職稱</th>`,
@@ -275,7 +311,7 @@ function handleCellClick(employeeId, date) {
   const key = cellKey(employeeId, date);
   if (document.getElementById("copyMode").checked && state.copiedCell) {
     state.schedule[key] = cloneCell(state.copiedCell);
-    state.schedule[key].updatedBy = document.getElementById("roleView").value;
+    state.schedule[key].updatedBy = state.roleView;
     renderAll();
     return;
   }
@@ -294,9 +330,18 @@ function openDialog(employeeId, date) {
   });
   document.getElementById("leaveType").value = cell.leaveType;
   document.getElementById("noteInput").value = cell.note;
+  setCellDialogEditMode(state.roleView !== "employee");
   renderCellLeaveBalance(employeeId, date);
   renderCellAlertDetails(cellAlerts);
   document.getElementById("cellDialog").showModal();
+}
+
+function setCellDialogEditMode(canEdit) {
+  document.getElementById("shiftSelect").disabled = !canEdit;
+  document.getElementById("leaveType").disabled = !canEdit;
+  document.getElementById("noteInput").disabled = !canEdit;
+  document.getElementById("saveCellBtn").hidden = !canEdit;
+  document.getElementById("clearCellBtn").hidden = !canEdit;
 }
 
 function renderCellLeaveBalance(employeeId, date) {
@@ -326,7 +371,7 @@ function renderCellAlertDetails(alerts) {
 function saveDialogCell() {
   if (!state.selectedCell) return;
   const selectedShifts = Array.from(document.getElementById("shiftSelect").selectedOptions).map((option) => option.value);
-  const role = document.getElementById("roleView").value;
+  const role = state.roleView;
   state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] = {
     shifts: selectedShifts,
     leaveType: document.getElementById("leaveType").value,
@@ -386,12 +431,30 @@ function populateDialogOptions() {
   )).join("");
 
   const activeEmployees = state.employees.filter((employee) => employee.active);
-  const scheduleEmployeeFilter = document.getElementById("scheduleEmployeeFilter");
-  const currentScheduleEmployee = state.scheduleEmployeeFilter || "all";
-  scheduleEmployeeFilter.innerHTML = `<option value="all">全部員工</option>` + activeEmployees.map((employee) => (
+  if (!activeEmployees.some((employee) => employee.id === state.currentEmployeeId) && activeEmployees.length) {
+    state.currentEmployeeId = activeEmployees[0].id;
+  }
+  document.getElementById("roleView").value = state.roleView;
+  const currentEmployeeSelect = document.getElementById("currentEmployeeSelect");
+  currentEmployeeSelect.innerHTML = activeEmployees.map((employee) => (
     `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
   )).join("");
-  state.scheduleEmployeeFilter = activeEmployees.some((employee) => employee.id === currentScheduleEmployee) ? currentScheduleEmployee : "all";
+  currentEmployeeSelect.value = state.currentEmployeeId;
+
+  const scheduleEmployeeFilter = document.getElementById("scheduleEmployeeFilter");
+  const currentScheduleEmployee = state.scheduleEmployeeFilter || "all";
+  if (canSeeAllEmployees()) {
+    scheduleEmployeeFilter.disabled = false;
+    scheduleEmployeeFilter.innerHTML = `<option value="all">全部員工</option>` + activeEmployees.map((employee) => (
+      `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
+    )).join("");
+    state.scheduleEmployeeFilter = activeEmployees.some((employee) => employee.id === currentScheduleEmployee) ? currentScheduleEmployee : "all";
+  } else {
+    scheduleEmployeeFilter.disabled = true;
+    state.scheduleEmployeeFilter = state.currentEmployeeId;
+    const employee = activeEmployees.find((item) => item.id === state.currentEmployeeId);
+    scheduleEmployeeFilter.innerHTML = `<option value="${state.currentEmployeeId}">${escapeHtml(employee?.name || "我的班表")}</option>`;
+  }
   scheduleEmployeeFilter.value = state.scheduleEmployeeFilter;
 
   const employeeFilter = document.getElementById("employeeFilter");
@@ -399,7 +462,7 @@ function populateDialogOptions() {
   employeeFilter.innerHTML = `<option value="all">全部</option>` + activeEmployees.map((employee) => (
     `<option value="${employee.id}">${escapeHtml(employee.name)}</option>`
   )).join("");
-  employeeFilter.value = activeEmployees.some((employee) => employee.id === current) ? current : "all";
+  employeeFilter.value = canSeeAllEmployees() && activeEmployees.some((employee) => employee.id === current) ? current : "all";
 
   const quickScheduleForm = document.getElementById("quickScheduleForm");
   quickScheduleForm.elements.employeeId.innerHTML = activeEmployees.map((employee) => (
@@ -422,7 +485,7 @@ function renderDashboard() {
   populateDialogOptions();
   const compliance = runCompliance();
   const days = getDaysInMonth(state.month);
-  const selectedEmployee = document.getElementById("employeeFilter").value || "all";
+  const selectedEmployee = canSeeAllEmployees() ? (document.getElementById("employeeFilter").value || "all") : state.currentEmployeeId;
   const selectedSeverity = document.getElementById("severityFilter").value || "all";
   const visibleCompliance = compliance.filter((item) => (
     (selectedEmployee === "all" || item.employeeId === selectedEmployee) &&
