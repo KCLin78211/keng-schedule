@@ -47,6 +47,30 @@ const trackedLeaveTypes = [
   { type: "事", label: "事假", quotaKey: "personalLeaveDays" },
   { type: "特休", label: "特休", quotaKey: "annualLeaveDays" }
 ];
+const complianceCodeLabels = {
+  HOLIDAY_WORK: "國定假日出勤",
+  REST_DAY: "休息日不足",
+  CONSEC_6D: "連續出勤超過 6 日",
+  DAY_8H: "單日超過 8 小時",
+  DAY_10H: "單日超過 10 小時",
+  DAY_12H: "單日超過 12 小時",
+  REST_30M: "班中休息不足",
+  SHIFT_11H: "換班間隔不足",
+  CONSEC_12D: "連續出勤超過 12 日",
+  WEEK_REST_MARK: "週內休假標記不足",
+  TWO_WEEK_REGULAR_2D: "兩週例假不足",
+  FOUR_WEEK_160H: "四週工時超過上限",
+  FOUR_WEEK_OFF_8D: "四週假日不足",
+  FOUR_WEEK_REGULAR_4D: "四週例假不足",
+  FOUR_WEEK_REST_4D: "四週休息日不足",
+  MONTH_OT_46H: "月延長工時超過上限",
+  WEEK_CONTRACT: "週契約工時超出",
+  WEEK_40H: "週工時超過 40 小時",
+  REGULAR_DAY: "例假不足",
+  LEAVE_USED_UP: "休假額度用罄",
+  LEAVE_EXPIRING: "休假即將到期",
+  LEAVE_EXPIRED: "休假已到期"
+};
 const holidayDates = new Set(["2026-06-19"]);
 
 function init() {
@@ -353,7 +377,7 @@ function renderCellAlertDetails(alerts) {
     return;
   }
   alertBox.innerHTML = alerts.map((alert) => (
-    `<article class="cell-alert-item ${alert.severity === "block" ? "severity-block" : "severity-warn"}"><div><strong>${alert.severity === "block" ? "阻擋" : "警告"} · ${escapeHtml(alert.code)}</strong><span>${escapeHtml(alert.message)}</span></div><em>${escapeHtml(alert.suggestion)}</em></article>`
+    `<article class="cell-alert-item ${alert.severity === "block" ? "severity-block" : "severity-warn"}"><div><strong>${alert.severity === "block" ? "阻擋" : "警告"} · ${escapeHtml(getComplianceCodeLabel(alert.code))}</strong><span>${escapeHtml(alert.message)}</span></div><em>${escapeHtml(alert.suggestion)}</em></article>`
   )).join("");
 }
 
@@ -599,12 +623,12 @@ function metric(label, value) {
 
 function renderComplianceItem(item) {
   const employee = state.employees.find((entry) => entry.id === item.employeeId);
-  return `<div class="list-item severity-${item.severity}"><strong>${employee.name} · ${item.scope} · ${item.code}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
+  return `<div class="list-item severity-${item.severity}"><strong>${escapeHtml(employee.name)} · ${escapeHtml(item.scope)} · ${escapeHtml(getComplianceCodeLabel(item.code))}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
 }
 
 function renderLeaveWarningItem(item) {
   const employee = state.employees.find((entry) => entry.id === item.employeeId);
-  return `<div class="list-item severity-${item.severity}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${escapeHtml(item.leaveLabel)} · ${escapeHtml(item.code)}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
+  return `<div class="list-item severity-${item.severity}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${escapeHtml(item.leaveLabel)} · ${escapeHtml(getComplianceCodeLabel(item.code))}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
 }
 
 function getLeaveBalanceWarnings() {
@@ -1074,7 +1098,7 @@ function runComplianceLegacy() {
       if (cell.leaveType === "例假" || cell.leaveType === "休息日" || cell.leaveType === "休") bucket.rest += 1;
 
       if (holidayDates.has(date) && working) {
-        results.push(compliance(employee.id, date, "HOLIDAY_WORK", "warn", "國定假日安排出勤，第一版僅提示人資確認給付或補休。", "在人資備註中記錄處理方式。"));
+        results.push(compliance(employee.id, date, "HOLIDAY_WORK", "warn", "國定假日依法應休假；若安排出勤，需確認勞工同意並依法加倍發給工資或辦理補休。", "請在人資紀錄中註明同意、加倍工資或補休處理。"));
       }
 
       previousLastEnd = shifts.length ? getShiftEnd(date, shifts[shifts.length - 1]) : previousLastEnd;
@@ -1171,7 +1195,7 @@ function runCompliance() {
       }
 
       if (holidayDates.has(date) && working) {
-        results.push(compliance(employee.id, date, "HOLIDAY_WORK", "warn", "國定假日安排出勤，需由人資另行確認給付或補休。", "請確認薪資或補休處理。"));
+        results.push(compliance(employee.id, date, "HOLIDAY_WORK", "warn", "國定假日依法應休假；若安排出勤，需確認勞工同意並依法加倍發給工資或辦理補休。", "請在人資紀錄中註明同意、加倍工資或補休處理。"));
       }
 
       previousLastEnd = shifts.length ? getShiftEnd(date, shifts[shifts.length - 1]) : previousLastEnd;
@@ -1216,6 +1240,10 @@ function runCompliance() {
 
 function compliance(employeeId, scope, code, severity, message, suggestion) {
   return { employeeId, scope, code, severity, message, suggestion, acknowledged: false };
+}
+
+function getComplianceCodeLabel(code) {
+  return complianceCodeLabels[code] || code;
 }
 
 function getEmployeeTotals() {
@@ -1268,7 +1296,7 @@ function exportCsv() {
   rows.push(["員工", "範圍", "嚴重度", "規則", "說明", "建議"]);
   runCompliance().forEach((item) => {
     const employee = state.employees.find((entry) => entry.id === item.employeeId);
-    rows.push([employee.name, item.scope, item.severity === "block" ? "阻擋" : "警告", item.code, item.message, item.suggestion]);
+    rows.push([employee.name, item.scope, item.severity === "block" ? "阻擋" : "警告", getComplianceCodeLabel(item.code), item.message, item.suggestion]);
   });
   const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
