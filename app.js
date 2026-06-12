@@ -7,6 +7,7 @@ const state = {
   roleView: "employee",
   storeFilter: "all",
   currentEmployeeId: "",
+  employeeByStore: {},
   selectedCell: null,
   scheduleEmployeeFilter: "all",
   mobileScheduleView: "cards",
@@ -90,13 +91,15 @@ function bindEvents() {
     renderAll();
   });
   document.getElementById("storeFilter").addEventListener("change", (event) => {
+    rememberCurrentEmployeeForStore();
     state.storeFilter = event.target.value;
-    state.currentEmployeeId = "";
     state.scheduleEmployeeFilter = "all";
+    restoreEmployeeForStore();
     renderAll();
   });
   document.getElementById("currentEmployeeSelect").addEventListener("change", (event) => {
     state.currentEmployeeId = event.target.value;
+    rememberCurrentEmployeeForStore();
     enforceRoleDefaults();
     renderAll();
   });
@@ -458,9 +461,7 @@ function populateDialogOptions() {
 
   populateStoreFilter();
   const activeEmployees = getVisibleEmployees();
-  if (!activeEmployees.some((employee) => employee.id === state.currentEmployeeId) && activeEmployees.length) {
-    state.currentEmployeeId = activeEmployees[0].id;
-  }
+  ensureStoreEmployeeSelection(activeEmployees);
   document.getElementById("roleView").value = state.roleView;
   const currentEmployeeSelect = document.getElementById("currentEmployeeSelect");
   currentEmployeeSelect.innerHTML = activeEmployees.map((employee) => (
@@ -524,6 +525,35 @@ function getVisibleEmployees() {
   return state.employees.filter((employee) => (
     employee.active && (state.storeFilter === "all" || employee.department === state.storeFilter)
   ));
+}
+
+function getStoreSelectionKey() {
+  return state.storeFilter || "all";
+}
+
+function rememberCurrentEmployeeForStore() {
+  if (!state.currentEmployeeId) return;
+  state.employeeByStore[getStoreSelectionKey()] = state.currentEmployeeId;
+}
+
+function restoreEmployeeForStore() {
+  state.currentEmployeeId = state.employeeByStore[getStoreSelectionKey()] || "";
+}
+
+function ensureStoreEmployeeSelection(activeEmployees) {
+  if (!activeEmployees.length) {
+    state.currentEmployeeId = "";
+    return;
+  }
+  if (activeEmployees.some((employee) => employee.id === state.currentEmployeeId)) {
+    rememberCurrentEmployeeForStore();
+    return;
+  }
+  const remembered = state.employeeByStore[getStoreSelectionKey()];
+  state.currentEmployeeId = activeEmployees.some((employee) => employee.id === remembered)
+    ? remembered
+    : activeEmployees[0].id;
+  rememberCurrentEmployeeForStore();
 }
 
 function renderDashboard() {
