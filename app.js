@@ -5,6 +5,7 @@ const state = {
   month: "2026-06",
   activeTab: "schedule",
   roleView: "employee",
+  storeFilter: "all",
   currentEmployeeId: "",
   selectedCell: null,
   scheduleEmployeeFilter: "all",
@@ -86,6 +87,12 @@ function bindEvents() {
   document.getElementById("roleView").addEventListener("change", (event) => {
     state.roleView = event.target.value;
     enforceRoleDefaults();
+    renderAll();
+  });
+  document.getElementById("storeFilter").addEventListener("change", (event) => {
+    state.storeFilter = event.target.value;
+    state.currentEmployeeId = "";
+    state.scheduleEmployeeFilter = "all";
     renderAll();
   });
   document.getElementById("currentEmployeeSelect").addEventListener("change", (event) => {
@@ -185,8 +192,8 @@ function renderSchedule() {
   const table = document.getElementById("scheduleTable");
   const days = getDaysInMonth(state.month);
   const compliance = groupByCell(runCompliance());
-  const visibleEmployees = state.employees.filter((employee) => (
-    employee.active && (state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter)
+  const visibleEmployees = getVisibleEmployees().filter((employee) => (
+    state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter
   ));
   const head = [
     `<tr><th class="employee-head">姓名 / 職稱</th>`,
@@ -449,7 +456,8 @@ function populateDialogOptions() {
     `<option value="${shift.id}">${escapeHtml(shift.name)} ${shift.start}-${shift.end} ${workHours(shift).toFixed(1)}h</option>`
   )).join("");
 
-  const activeEmployees = state.employees.filter((employee) => employee.active);
+  populateStoreFilter();
+  const activeEmployees = getVisibleEmployees();
   if (!activeEmployees.some((employee) => employee.id === state.currentEmployeeId) && activeEmployees.length) {
     state.currentEmployeeId = activeEmployees[0].id;
   }
@@ -501,22 +509,42 @@ function populateDialogOptions() {
   )).join("");
 }
 
+function populateStoreFilter() {
+  const storeFilter = document.getElementById("storeFilter");
+  const stores = [...new Set(state.employees.map((employee) => employee.department).filter(Boolean))].sort();
+  const current = stores.includes(state.storeFilter) ? state.storeFilter : "all";
+  storeFilter.innerHTML = `<option value="all">全部門市</option>` + stores.map((store) => (
+    `<option value="${escapeHtml(store)}">${escapeHtml(store)}</option>`
+  )).join("");
+  state.storeFilter = current;
+  storeFilter.value = current;
+}
+
+function getVisibleEmployees() {
+  return state.employees.filter((employee) => (
+    employee.active && (state.storeFilter === "all" || employee.department === state.storeFilter)
+  ));
+}
+
 function renderDashboard() {
   populateDialogOptions();
   const compliance = runCompliance();
   const days = getDaysInMonth(state.month);
   const selectedEmployee = canSeeAllEmployees() ? (document.getElementById("employeeFilter").value || "all") : state.currentEmployeeId;
   const selectedSeverity = document.getElementById("severityFilter").value || "all";
+  const visibleEmployeeIds = new Set(getVisibleEmployees().map((employee) => employee.id));
   const visibleCompliance = compliance.filter((item) => (
+    visibleEmployeeIds.has(item.employeeId) &&
     (selectedEmployee === "all" || item.employeeId === selectedEmployee) &&
     (selectedSeverity === "all" || item.severity === selectedSeverity)
   ));
   const leaveWarnings = getLeaveBalanceWarnings().filter((item) => (
+    visibleEmployeeIds.has(item.employeeId) &&
     (selectedEmployee === "all" || item.employeeId === selectedEmployee) &&
     (selectedSeverity === "all" || item.severity === selectedSeverity)
   ));
   const totals = getEmployeeTotals();
-  const dashboardEmployees = state.employees.filter((employee) => (
+  const dashboardEmployees = getVisibleEmployees().filter((employee) => (
     employee.active && (selectedEmployee === "all" || employee.id === selectedEmployee)
   ));
   const monthHours = dashboardEmployees.reduce((sum, employee) => sum + (totals[employee.id]?.hours || 0), 0);
