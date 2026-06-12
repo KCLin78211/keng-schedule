@@ -527,10 +527,13 @@ function renderDashboard() {
   const leaveCount = dashboardEmployees.reduce((sum, employee) => (
     sum + days.filter((date) => ["特休", "請假", "病", "事"].includes((state.schedule[cellKey(employee.id, date)] || emptyCell()).leaveType)).length
   ), 0);
+  const blockingWarnings = visibleCompliance.filter((item) => (
+    item.severity === "block" && !getComplianceActionText(item)
+  )).length;
 
   document.getElementById("metrics").innerHTML = [
     metric("本月總工時", `${monthHours.toFixed(1)}h`),
-    metric("阻擋警示", compliance.filter((item) => item.severity === "block").length),
+    metric("阻擋警示", blockingWarnings),
     metric("加班風險", `${overtimeRisk.toFixed(1)}h`),
     metric("休假/請假", `${leaveCount} 天`)
   ].join("");
