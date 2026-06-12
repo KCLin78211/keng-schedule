@@ -1,30 +1,16 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzdzdL_8l-7nbroSZVTwGvicHDFKzgD6zfVNs50_X3P5VG7LGut2LWyEVCQfyETQtQAug/exec";
-const LOCAL_CACHE_KEY = "keng-schedule-cloud-cache-v1";
+const LOCAL_CACHE_KEY = "keng-schedule-cloud-cache-v2";
 const state = {
   month: "2026-06",
   activeTab: "schedule",
   roleView: "employee",
-  currentEmployeeId: "e1",
+  currentEmployeeId: "",
   selectedCell: null,
   scheduleEmployeeFilter: "all",
   mobileScheduleView: "cards",
-  employees: [
-    { id: "e1", name: "季恆", title: "襄理", type: "正職", startDate: "2022-03-01", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e2", name: "章伶", title: "主任", type: "正職", startDate: "2021-11-15", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e3", name: "祖華", title: "儲備", type: "正職", startDate: "2024-01-10", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e4", name: "子捷", title: "專員", type: "正職", startDate: "2024-05-20", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e5", name: "靜怡", title: "專員", type: "正職", startDate: "2023-09-01", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e6", name: "若芸", title: "早計", type: "兼職", startDate: "2025-02-18", policy: "四週變形工時", contractHours: 24, active: true, department: "台南門市" },
-    { id: "e7", name: "柏亨", title: "晚計", type: "兼職", startDate: "2025-08-01", policy: "四週變形工時", contractHours: 20, active: true, department: "台南門市" }
-  ],
-  shifts: [
-    { id: "s1", name: "早A", start: "10:00", end: "17:00", breakMinutes: 60, crossesMidnight: false, role: "早計", color: "#e8af32" },
-    { id: "s2", name: "中班", start: "11:30", end: "20:00", breakMinutes: 60, crossesMidnight: false, role: "專員", color: "#5aa17f" },
-    { id: "s3", name: "晚班", start: "13:00", end: "21:30", breakMinutes: 60, crossesMidnight: false, role: "晚計", color: "#4d75a8" },
-    { id: "s4", name: "全K", start: "11:00", end: "21:30", breakMinutes: 90, crossesMidnight: false, role: "儲備", color: "#c87038" },
-    { id: "s5", name: "超長支援", start: "09:00", end: "23:00", breakMinutes: 60, crossesMidnight: false, role: "主任", color: "#b3261e" }
-  ],
+  employees: [],
+  shifts: [],
   schedule: {},
   leaveRecords: [],
   cloud: {
@@ -32,11 +18,7 @@ const state = {
     message: "尚未連線",
     lastSavedAt: ""
   },
-  leaveBalances: [
-    { id: "lb1", employeeId: "e1", year: 2026, sickLeaveDays: 30, personalLeaveDays: 14, annualLeaveDays: 10, startsAt: "2026-01-01", expiresAt: "2026-12-31", note: "" },
-    { id: "lb2", employeeId: "e2", year: 2026, sickLeaveDays: 30, personalLeaveDays: 14, annualLeaveDays: 14, startsAt: "2026-01-01", expiresAt: "2026-12-31", note: "" },
-    { id: "lb3", employeeId: "e3", year: 2026, sickLeaveDays: 30, personalLeaveDays: 14, annualLeaveDays: 7, startsAt: "2026-01-01", expiresAt: "2026-12-31", note: "" }
-  ],
+  leaveBalances: [],
   editingEmployeeId: null,
   editingShiftId: null,
   editingLeaveBalanceId: null
@@ -136,40 +118,15 @@ function bindEvents() {
 }
 
 function seedSchedule() {
+  if (!state.employees.length) return;
   if (Object.keys(state.schedule).some((key) => key.startsWith(state.month))) return;
   const days = getDaysInMonth(state.month);
-  const useJuneExample = state.month === "2026-06";
-  state.employees.forEach((employee, employeeIndex) => {
-    days.forEach((date, index) => {
-      const day = index + 1;
+  state.employees.forEach((employee) => {
+    days.forEach((date) => {
       const key = cellKey(employee.id, date);
-      const dow = new Date(`${date}T00:00:00`).getDay();
-      const cell = { shifts: [], leaveType: "", note: "", complianceActions: {}, createdBy: "system", updatedBy: "system" };
-
-      if (useJuneExample) {
-        if (dow === 0) cell.leaveType = day % 3 === 0 ? "休息日" : "休";
-        if (dow === 1 && employeeIndex % 2 === 0) cell.leaveType = "例假";
-        if (!cell.leaveType && (employeeIndex + day) % 5 !== 0) {
-          cell.shifts = [pickShift(employee, day)];
-        }
-        if (employee.id === "e2" && day >= 1 && day <= 7) cell.shifts = ["s3"];
-        if (employee.id === "e2" && day === 8) cell.shifts = ["s5"];
-        if (employee.id === "e3" && [4, 5, 6, 7].includes(day)) cell.leaveType = "特休";
-        if (employee.id === "e6" && [2, 3, 4, 5, 6, 7].includes(day)) cell.shifts = ["s1"];
-        if (holidayDates.has(date) && !cell.leaveType) cell.note = "國定假日出勤";
-      }
-
-      state.schedule[key] = cell;
+      if (!state.schedule[key]) state.schedule[key] = emptyCell();
     });
   });
-}
-
-function pickShift(employee, day) {
-  if (employee.title.includes("早")) return "s1";
-  if (employee.title.includes("晚")) return "s3";
-  if (employee.title === "主任") return day % 4 === 0 ? "s4" : "s3";
-  if (employee.title === "儲備") return day % 3 === 0 ? "s4" : "s2";
-  return day % 2 === 0 ? "s2" : "s1";
 }
 
 function renderAll() {
@@ -1626,3 +1583,4 @@ function escapeHtml(value) {
 }
 
 init();
+
