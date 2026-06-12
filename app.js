@@ -198,8 +198,9 @@ function renderSchedule() {
   const visibleEmployees = getVisibleEmployees().filter((employee) => (
     state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter
   ));
+  document.getElementById("schedule-title").textContent = `月排班矩陣 · ${getCurrentStoreLabel()}`;
   const head = [
-    `<tr><th class="employee-head">姓名 / 職稱</th>`,
+    `<tr><th class="employee-head">姓名 / 門市</th>`,
     ...days.map((date) => {
       const d = new Date(`${date}T00:00:00`);
       const weekend = d.getDay() === 0 || d.getDay() === 6;
@@ -209,18 +210,45 @@ function renderSchedule() {
     `</tr>`
   ].join("");
 
-  const body = visibleEmployees.map((employee) => {
-    const row = days.map((date) => renderCell(employee, date, compliance[cellKey(employee.id, date)] || []));
-    const summary = renderSummaryCells(employee, days);
-    const hourPlan = getEmployeeMonthHourPlan(employee, days);
-    return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div><div class="employee-hours">已排 ${hourPlan.scheduled.toFixed(1)}h / 未排 ${hourPlan.remaining.toFixed(1)}h</div></td>${row.join("")}${summary}</tr>`;
-  }).join("") || `<tr><td class="employee-cell">沒有符合條件的員工</td><td colspan="${days.length + summaryColumns.length}"></td></tr>`;
+  const body = renderScheduleRows(visibleEmployees, days, compliance)
+    || `<tr><td class="employee-cell">沒有符合條件的員工</td><td colspan="${days.length + summaryColumns.length}"></td></tr>`;
 
   table.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
   table.querySelectorAll(".day-cell").forEach((cell) => {
     cell.addEventListener("click", () => handleCellClick(cell.dataset.employeeId, cell.dataset.date));
   });
   renderMobileSchedule(days, visibleEmployees, compliance);
+}
+
+function renderScheduleRows(employees, days, compliance) {
+  if (state.storeFilter !== "all" || state.scheduleEmployeeFilter !== "all") {
+    return employees.map((employee) => renderEmployeeScheduleRow(employee, days, compliance)).join("");
+  }
+
+  return groupEmployeesByStore(employees).map((group) => {
+    const storeRow = `<tr class="store-group-row"><td colspan="${days.length + summaryColumns.length + 1}">${escapeHtml(group.store)}</td></tr>`;
+    return storeRow + group.employees.map((employee) => renderEmployeeScheduleRow(employee, days, compliance)).join("");
+  }).join("");
+}
+
+function renderEmployeeScheduleRow(employee, days, compliance) {
+  const row = days.map((date) => renderCell(employee, date, compliance[cellKey(employee.id, date)] || []));
+  const summary = renderSummaryCells(employee, days);
+  const hourPlan = getEmployeeMonthHourPlan(employee, days);
+  return `<tr><td class="employee-cell"><div class="employee-name">${escapeHtml(employee.name)}</div><div class="employee-store">${escapeHtml(employee.department || "未指定門市")}</div><div class="employee-meta">${escapeHtml(employee.title)} · ${employee.type} · ${employee.contractHours}h/週</div><div class="employee-hours">已排 ${hourPlan.scheduled.toFixed(1)}h / 未排 ${hourPlan.remaining.toFixed(1)}h</div></td>${row.join("")}${summary}</tr>`;
+}
+
+function groupEmployeesByStore(employees) {
+  const groups = new Map();
+  employees.forEach((employee) => {
+    const store = employee.department || "未指定門市";
+    if (!groups.has(store)) groups.set(store, []);
+    groups.get(store).push(employee);
+  });
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "zh-Hant")).map(([store, groupEmployees]) => ({
+    store,
+    employees: groupEmployees
+  }));
 }
 
 function renderSummaryCells(employee, days) {
@@ -472,8 +500,8 @@ function populateDialogOptions() {
   const scheduleEmployeeFilter = document.getElementById("scheduleEmployeeFilter");
   const currentScheduleEmployee = state.scheduleEmployeeFilter || "all";
   scheduleEmployeeFilter.disabled = false;
-  scheduleEmployeeFilter.innerHTML = `<option value="all">全部員工</option>` + activeEmployees.map((employee) => (
-    `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
+  scheduleEmployeeFilter.innerHTML = `<option value="all">${escapeHtml(getScheduleEmployeeAllLabel())}</option>` + activeEmployees.map((employee) => (
+    `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.department || "未指定門市")} · ${escapeHtml(employee.title)}</option>`
   )).join("");
   state.scheduleEmployeeFilter = activeEmployees.some((employee) => employee.id === currentScheduleEmployee) ? currentScheduleEmployee : "all";
   scheduleEmployeeFilter.value = state.scheduleEmployeeFilter;
@@ -525,6 +553,14 @@ function getVisibleEmployees() {
   return state.employees.filter((employee) => (
     employee.active && (state.storeFilter === "all" || employee.department === state.storeFilter)
   ));
+}
+
+function getCurrentStoreLabel() {
+  return state.storeFilter === "all" ? "全部門市" : state.storeFilter;
+}
+
+function getScheduleEmployeeAllLabel() {
+  return state.storeFilter === "all" ? "全部門市員工" : `${state.storeFilter}全部員工`;
 }
 
 function getStoreSelectionKey() {
