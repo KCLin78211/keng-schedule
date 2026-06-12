@@ -1239,7 +1239,7 @@ function runCompliance() {
 }
 
 function compliance(employeeId, scope, code, severity, message, suggestion) {
-  return { employeeId, scope, code, severity, message, suggestion, acknowledged: false };
+  return { employeeId, scope, rawCode: code, code: getComplianceCodeLabel(code), severity, message, suggestion, acknowledged: false };
 }
 
 function getComplianceCodeLabel(code) {
