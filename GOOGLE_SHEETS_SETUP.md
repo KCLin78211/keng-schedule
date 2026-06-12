@@ -41,3 +41,17 @@ https://docs.google.com/spreadsheets/d/1Y__FELo8Q922P742jto9gE_y9ObCo5yUxdynYErI
 - 開啟網頁時從 Sheets 載入最新資料。
 - 儲存排班時寫回 Sheets。
 - 更新 GitHub Pages 時不覆蓋已排好的資料。
+
+## 4. 更新 Apps Script
+
+如果本專案的 `google-apps-script.gs` 有更新：
+
+1. 回 Apps Script 編輯器。
+2. 用新的 `google-apps-script.gs` 全部內容覆蓋舊內容。
+3. 按儲存。
+4. 點 `Deploy`，選 `Manage deployments`。
+5. 編輯原本的 Web App deployment。
+6. Version 選 `New version`。
+7. 按 `Deploy`。
+
+Web App URL 通常會維持同一個，但內容會更新。

@@ -46,6 +46,35 @@ textarea {
   z-index: 10;
 }
 
+.cloud-status {
+  flex-basis: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.cloud-status.loading,
+.cloud-status.saving {
+  color: var(--warn);
+  border-color: rgba(183, 104, 0, 0.35);
+  background: #fff8df;
+}
+
+.cloud-status.saved {
+  color: var(--ok);
+  border-color: rgba(35, 120, 79, 0.35);
+  background: #f3fbf6;
+}
+
+.cloud-status.error {
+  color: var(--block);
+  border-color: rgba(179, 38, 30, 0.35);
+  background: #fff3f1;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;

@@ -1,4 +1,6 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzdzdL_8l-7nbroSZVTwGvicHDFKzgD6zfVNs50_X3P5VG7LGut2LWyEVCQfyETQtQAug/exec";
+const LOCAL_CACHE_KEY = "keng-schedule-cloud-cache-v1";
 const state = {
   month: "2026-06",
   activeTab: "schedule",
@@ -25,6 +27,11 @@ const state = {
   ],
   schedule: {},
   leaveRecords: [],
+  cloud: {
+    status: "idle",
+    message: "尚未連線",
+    lastSavedAt: ""
+  },
   leaveBalances: [
     { id: "lb1", employeeId: "e1", year: 2026, sickLeaveDays: 30, personalLeaveDays: 14, annualLeaveDays: 10, startsAt: "2026-01-01", expiresAt: "2026-12-31", note: "" },
     { id: "lb2", employeeId: "e2", year: 2026, sickLeaveDays: 30, personalLeaveDays: 14, annualLeaveDays: 14, startsAt: "2026-01-01", expiresAt: "2026-12-31", note: "" },
@@ -74,9 +81,11 @@ const complianceCodeLabels = {
 const holidayDates = new Set(["2026-06-19"]);
 
 function init() {
-  seedSchedule();
   bindEvents();
+  loadLocalSnapshot();
+  seedSchedule();
   renderAll();
+  loadCloudData();
 }
 
 function bindEvents() {
@@ -135,7 +144,7 @@ function seedSchedule() {
       const day = index + 1;
       const key = cellKey(employee.id, date);
       const dow = new Date(`${date}T00:00:00`).getDay();
-      const cell = { shifts: [], leaveType: "", note: "", createdBy: "system", updatedBy: "system" };
+      const cell = { shifts: [], leaveType: "", note: "", complianceActions: {}, createdBy: "system", updatedBy: "system" };
 
       if (useJuneExample) {
         if (dow === 0) cell.leaveType = day % 3 === 0 ? "休息日" : "休";
@@ -171,6 +180,7 @@ function renderAll() {
   renderProfile();
   renderDashboard();
   renderAdmin();
+  renderCloudStatus();
 }
 
 function renderTabs() {
@@ -415,7 +425,7 @@ function saveDialogCell() {
     updatedBy: role
   };
   document.getElementById("cellDialog").close();
-  renderAll();
+  afterDataChange();
 }
 
 function getDialogCellValue() {
@@ -439,7 +449,7 @@ function clearDialogCell() {
   if (!state.selectedCell) return;
   state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] = emptyCell();
   document.getElementById("cellDialog").close();
-  renderAll();
+  afterDataChange();
 }
 
 function applyQuickSchedule(event) {
@@ -462,6 +472,7 @@ function applyQuickSchedule(event) {
     shifts: selectedShifts,
     leaveType: formData.get("leaveType"),
     note: formData.get("note").trim(),
+    complianceActions: {},
     createdBy: "quick-schedule",
     updatedBy: "quick-schedule"
   };
@@ -471,9 +482,8 @@ function applyQuickSchedule(event) {
   Array.from(form.elements.shiftIds.options).forEach((option) => {
     option.selected = false;
   });
-  renderAll();
   state.activeTab = "schedule";
-  renderTabs();
+  afterDataChange();
 }
 
 function populateDialogOptions() {
@@ -783,7 +793,7 @@ function addEmployee(event) {
   }
   saveEmployeeLeaveBalanceFromForm(id, form);
   resetEmployeeForm();
-  renderAll();
+  afterDataChange();
 }
 
 function addShift(event) {
@@ -807,7 +817,7 @@ function addShift(event) {
     state.shifts.push(shiftData);
   }
   resetShiftForm();
-  renderAll();
+  afterDataChange();
 }
 
 function editEmployee(id) {
@@ -839,7 +849,7 @@ function deleteEmployee(id) {
   });
   if (state.scheduleEmployeeFilter === id) state.scheduleEmployeeFilter = "all";
   if (state.editingEmployeeId === id) resetEmployeeForm();
-  renderAll();
+  afterDataChange();
 }
 
 function resetEmployeeForm() {
@@ -918,7 +928,7 @@ function deleteShift(id) {
     cell.shifts = cell.shifts.filter((shiftId) => shiftId !== id);
   });
   if (state.editingShiftId === id) resetShiftForm();
-  renderAll();
+  afterDataChange();
 }
 
 function resetShiftForm() {
@@ -959,7 +969,7 @@ function saveLeaveBalance(event) {
     state.leaveBalances.push(balanceData);
   }
   resetLeaveBalanceForm();
-  renderAll();
+  afterDataChange();
 }
 
 function editLeaveBalance(id) {
@@ -987,7 +997,7 @@ function deleteLeaveBalance(id) {
   if (!confirm("確定刪除此休假額度？排班格中的休假標記不會被刪除。")) return;
   state.leaveBalances = state.leaveBalances.filter((item) => item.id !== id);
   if (state.editingLeaveBalanceId === id) resetLeaveBalanceForm();
-  renderAll();
+  afterDataChange();
 }
 
 function resetLeaveBalanceForm() {
@@ -1319,6 +1329,156 @@ function getComplianceActionText(item) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(item.scope)) return "";
   const actions = getCellAlertActions(item.employeeId, item.scope);
   return (actions[getAlertActionKey(item)] || "").trim();
+}
+
+function getDatabaseSnapshot() {
+  return {
+    employees: state.employees,
+    shifts: state.shifts,
+    schedule: state.schedule,
+    leaveBalances: state.leaveBalances,
+    leaveRecords: state.leaveRecords
+  };
+}
+
+function applyDatabaseSnapshot(data) {
+  if (!data) return;
+  if (Array.isArray(data.employees) && data.employees.length) state.employees = data.employees;
+  if (Array.isArray(data.shifts) && data.shifts.length) state.shifts = data.shifts;
+  if (data.schedule && Object.keys(data.schedule).length) {
+    state.schedule = Object.fromEntries(Object.entries(data.schedule).map(([key, cell]) => [key, normalizeCell(cell)]));
+  }
+  if (Array.isArray(data.leaveBalances) && data.leaveBalances.length) state.leaveBalances = data.leaveBalances;
+  if (Array.isArray(data.leaveRecords)) state.leaveRecords = data.leaveRecords;
+}
+
+function hasRemoteData(data) {
+  return Boolean(
+    (Array.isArray(data?.employees) && data.employees.length) ||
+    (Array.isArray(data?.shifts) && data.shifts.length) ||
+    (data?.schedule && Object.keys(data.schedule).length) ||
+    (Array.isArray(data?.leaveBalances) && data.leaveBalances.length)
+  );
+}
+
+function normalizeCell(cell) {
+  return {
+    shifts: Array.isArray(cell?.shifts) ? cell.shifts : [],
+    leaveType: cell?.leaveType || "",
+    note: cell?.note || "",
+    complianceActions: cell?.complianceActions || {},
+    createdBy: cell?.createdBy || "",
+    updatedBy: cell?.updatedBy || ""
+  };
+}
+
+function loadLocalSnapshot() {
+  try {
+    const cached = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (!cached) return;
+    const parsed = JSON.parse(cached);
+    applyDatabaseSnapshot(parsed.data);
+    state.cloud.lastSavedAt = parsed.savedAt || "";
+    state.cloud.message = "已載入本機暫存，正在同步雲端";
+  } catch (error) {
+    console.warn("Local cache load failed", error);
+  }
+}
+
+function saveLocalSnapshot() {
+  try {
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      data: getDatabaseSnapshot()
+    }));
+  } catch (error) {
+    console.warn("Local cache save failed", error);
+  }
+}
+
+async function loadCloudData() {
+  setCloudStatus("loading", "正在讀取 Google Sheets");
+  try {
+    const result = await sheetsJsonp({ action: "load" });
+    if (!result.ok) throw new Error(result.error || "load failed");
+    if (hasRemoteData(result.data)) {
+      applyDatabaseSnapshot(result.data);
+      seedSchedule();
+      saveLocalSnapshot();
+      setCloudStatus("saved", "已載入 Google Sheets 最新資料", new Date().toISOString());
+      renderAll();
+    } else {
+      saveLocalSnapshot();
+      await persistCloudData("Sheet 目前是空的，已送出目前資料初始化");
+    }
+  } catch (error) {
+    setCloudStatus("error", `雲端讀取失敗，先使用本機資料：${error.message}`);
+    renderCloudStatus();
+  }
+}
+
+function afterDataChange() {
+  saveLocalSnapshot();
+  renderAll();
+  persistCloudData();
+}
+
+async function persistCloudData(message = "正在同步 Google Sheets") {
+  setCloudStatus("saving", message);
+  renderCloudStatus();
+  try {
+    await fetch(SHEETS_API_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "saveAll", data: getDatabaseSnapshot() })
+    });
+    setCloudStatus("saved", "已送出 Google Sheets 儲存", new Date().toISOString());
+    saveLocalSnapshot();
+  } catch (error) {
+    setCloudStatus("error", `雲端儲存失敗，已保留本機暫存：${error.message}`);
+  }
+  renderCloudStatus();
+}
+
+function sheetsJsonp(params) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `kengSheetsCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("讀取逾時"));
+    }, 15000);
+    const query = new URLSearchParams({ ...params, callback: callbackName });
+    window[callbackName] = (payload) => {
+      cleanup();
+      resolve(payload);
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("無法連線到 Apps Script"));
+    };
+    script.src = `${SHEETS_API_URL}?${query.toString()}`;
+    document.body.appendChild(script);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+  });
+}
+
+function setCloudStatus(status, message, savedAt = state.cloud.lastSavedAt) {
+  state.cloud = { status, message, lastSavedAt: savedAt || "" };
+}
+
+function renderCloudStatus() {
+  const element = document.getElementById("cloudStatus");
+  if (!element) return;
+  const timeText = state.cloud.lastSavedAt ? ` · ${new Date(state.cloud.lastSavedAt).toLocaleString("zh-TW")}` : "";
+  element.className = `cloud-status ${state.cloud.status}`;
+  element.textContent = `${state.cloud.message}${timeText}`;
 }
 
 function getEmployeeTotals() {

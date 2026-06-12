@@ -26,13 +26,19 @@ const TABLES = {
 
 function doGet(event) {
   const action = event.parameter.action || "load";
+  const callback = event.parameter.callback;
   ensureSchema();
 
   if (action === "setup") {
-    return jsonResponse({ ok: true, message: "schema ready" });
+    return jsonResponse({ ok: true, message: "schema ready" }, callback);
   }
 
-  return jsonResponse({ ok: true, data: loadDatabase() });
+  if (action === "saveAll") {
+    saveDatabase(JSON.parse(event.parameter.payload || "{}"));
+    return jsonResponse({ ok: true, savedAt: new Date().toISOString() }, callback);
+  }
+
+  return jsonResponse({ ok: true, data: loadDatabase() }, callback);
 }
 
 function doPost(event) {
@@ -211,8 +217,14 @@ function parseJson(value, fallback) {
   }
 }
 
-function jsonResponse(payload) {
+function jsonResponse(payload, callback) {
+  const body = callback
+    ? `${callback}(${JSON.stringify(payload)});`
+    : JSON.stringify(payload);
+  const mimeType = callback
+    ? ContentService.MimeType.JAVASCRIPT
+    : ContentService.MimeType.JSON;
   return ContentService
-    .createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
+    .createTextOutput(body)
+    .setMimeType(mimeType);
 }
