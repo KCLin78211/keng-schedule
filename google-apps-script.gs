@@ -10,15 +10,15 @@ const TABLES = {
     "role", "color", "updatedAt"
   ],
   schedule_cells: [
-    "key", "month", "employeeId", "date", "shiftsJson", "leaveType", "note",
+    "key", "month", "employeeName", "date", "shiftsJson", "leaveType", "note",
     "complianceActionsJson", "createdBy", "updatedBy", "updatedAt"
   ],
   leave_balances: [
-    "id", "employeeId", "year", "sickLeaveDays", "personalLeaveDays",
+    "id", "employeeName", "year", "sickLeaveDays", "personalLeaveDays",
     "annualLeaveDays", "startsAt", "expiresAt", "note", "updatedAt"
   ],
   leave_records: [
-    "id", "employeeId", "leaveType", "startDate", "endDate", "hours",
+    "id", "employeeName", "leaveType", "startDate", "endDate", "hours",
     "status", "note", "updatedAt"
   ],
   app_meta: ["key", "value", "updatedAt"]
@@ -84,12 +84,9 @@ function ensureSchema() {
 }
 
 function loadDatabase() {
+  const employees = readEmployees();
   return {
-    employees: readTable("employees").map((row) => ({
-      ...row,
-      contractHours: Number(row.contractHours || 0),
-      active: row.active === true || row.active === "TRUE" || row.active === "true"
-    })),
+    employees,
     shifts: readTable("shift_templates").map((row) => ({
       id: row.id,
       name: row.name,
@@ -101,7 +98,10 @@ function loadDatabase() {
       color: row.color
     })),
     schedule: readTable("schedule_cells").reduce((result, row) => {
-      result[row.key] = {
+      const employeeId = row.employeeId || getEmployeeIdByName(row.employeeName, employees);
+      const key = row.key || [row.month, employeeId, row.date].join(":");
+      if (!employeeId || !row.date) return result;
+      result[key] = {
         shifts: parseJson(row.shiftsJson, []),
         leaveType: row.leaveType || "",
         note: row.note || "",
@@ -113,21 +113,24 @@ function loadDatabase() {
     }, {}),
     leaveBalances: readTable("leave_balances").map((row) => ({
       ...row,
+      employeeId: row.employeeId || getEmployeeIdByName(row.employeeName, employees),
       year: Number(row.year || 0),
       sickLeaveDays: Number(row.sickLeaveDays || 0),
       personalLeaveDays: Number(row.personalLeaveDays || 0),
       annualLeaveDays: Number(row.annualLeaveDays || 0)
-    })),
+    })).filter((row) => row.employeeId),
     leaveRecords: readTable("leave_records").map((row) => ({
       ...row,
+      employeeId: row.employeeId || getEmployeeIdByName(row.employeeName, employees),
       hours: Number(row.hours || 0)
-    })),
+    })).filter((row) => row.employeeId),
     appMeta: readTable("app_meta")
   };
 }
 
 function saveDatabase(data) {
   const now = new Date().toISOString();
+  const employeeNameById = buildEmployeeNameById(data.employees || []);
 
   writeTable("employees", (data.employees || []).map((employee) => ({
     ...employee,
@@ -144,7 +147,7 @@ function saveDatabase(data) {
     return {
       key,
       month: parts[0] || "",
-      employeeId: parts[1] || "",
+      employeeName: employeeNameById[parts[1]] || parts[1] || "",
       date: parts[2] || "",
       shiftsJson: JSON.stringify(cell.shifts || []),
       leaveType: cell.leaveType || "",
@@ -159,11 +162,13 @@ function saveDatabase(data) {
 
   writeTable("leave_balances", (data.leaveBalances || []).map((balance) => ({
     ...balance,
+    employeeName: employeeNameById[balance.employeeId] || balance.employeeId || "",
     updatedAt: now
   })));
 
   writeTable("leave_records", (data.leaveRecords || []).map((record) => ({
     ...record,
+    employeeName: employeeNameById[record.employeeId] || record.employeeId || "",
     updatedAt: now
   })));
 
@@ -184,6 +189,27 @@ function readTable(name) {
       object[header] = row[index];
       return object;
     }, {}));
+}
+
+function readEmployees() {
+  return readTable("employees").map((row) => ({
+    ...row,
+    contractHours: Number(row.contractHours || 0),
+    active: row.active === true || row.active === "TRUE" || row.active === "true"
+  }));
+}
+
+function buildEmployeeNameById(employees) {
+  return employees.reduce((result, employee) => {
+    result[employee.id] = employee.name;
+    return result;
+  }, {});
+}
+
+function getEmployeeIdByName(employeeName, employees) {
+  if (employees.some((item) => item.id === employeeName)) return employeeName;
+  const employee = employees.find((item) => item.name === employeeName);
+  return employee?.id || "";
 }
 
 function writeTable(name, objects) {
