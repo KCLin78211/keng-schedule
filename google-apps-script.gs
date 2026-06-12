@@ -10,15 +10,15 @@ const TABLES = {
     "role", "color", "updatedAt"
   ],
   schedule_cells: [
-    "key", "month", "employeeName", "date", "shiftsJson", "leaveType", "note",
+    "key", "month", "employeeId", "employeeName", "date", "shiftsJson", "leaveType", "note",
     "complianceActionsJson", "createdBy", "updatedBy", "updatedAt"
   ],
   leave_balances: [
-    "id", "employeeName", "year", "sickLeaveDays", "personalLeaveDays",
+    "id", "employeeId", "employeeName", "year", "sickLeaveDays", "personalLeaveDays",
     "annualLeaveDays", "startsAt", "expiresAt", "note", "updatedAt"
   ],
   leave_records: [
-    "id", "employeeName", "leaveType", "startDate", "endDate", "hours",
+    "id", "employeeId", "employeeName", "leaveType", "startDate", "endDate", "hours",
     "status", "note", "updatedAt"
   ],
   app_meta: ["key", "value", "updatedAt"]
@@ -147,6 +147,7 @@ function saveDatabase(data) {
     return {
       key,
       month: parts[0] || "",
+      employeeId: parts[1] || "",
       employeeName: employeeNameById[parts[1]] || parts[1] || "",
       date: parts[2] || "",
       shiftsJson: JSON.stringify(cell.shifts || []),
@@ -162,12 +163,14 @@ function saveDatabase(data) {
 
   writeTable("leave_balances", (data.leaveBalances || []).map((balance) => ({
     ...balance,
+    employeeId: balance.employeeId || "",
     employeeName: employeeNameById[balance.employeeId] || balance.employeeId || "",
     updatedAt: now
   })));
 
   writeTable("leave_records", (data.leaveRecords || []).map((record) => ({
     ...record,
+    employeeId: record.employeeId || "",
     employeeName: employeeNameById[record.employeeId] || record.employeeId || "",
     updatedAt: now
   })));
