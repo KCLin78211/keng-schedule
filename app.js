@@ -268,7 +268,7 @@ function getEmployeeMonthSummary(employeeId, days) {
     if (cell.leaveType === "事") counts.personal += 1;
     if (cell.leaveType === "特休") counts.annual += 1;
     if (cell.shifts.length) counts.workDays += 1;
-    counts.scheduledHours += cell.shifts.map(getShift).filter(Boolean).reduce((sum, shift) => sum + workHours(shift), 0);
+    counts.scheduledHours += getScheduledHoursFromCell(cell);
     counts.attendanceHours += getAttendanceHoursFromCell(cell);
   });
   return counts;
@@ -284,6 +284,17 @@ function getAttendanceHoursFromCell(cell) {
   const note = cell?.note || "";
   const match = note.match(/原表合計\s*([0-9]+(?:\.[0-9]+)?)h/);
   return match ? Number(match[1]) : 0;
+}
+
+function getScheduledHoursFromCell(cell) {
+  return (cell?.shifts || []).map(getShift).filter(Boolean).reduce((sum, shift) => sum + workHours(shift), 0);
+}
+
+function hasAttendanceMismatch(cell) {
+  const attendanceHours = getAttendanceHoursFromCell(cell);
+  if (!attendanceHours) return false;
+  const scheduledHours = getScheduledHoursFromCell(cell);
+  return Math.abs(scheduledHours - attendanceHours) > 0.1;
 }
 
 function getEmployeeMonthHourPlan(employee, days) {
@@ -313,7 +324,9 @@ function renderCell(employee, date, alerts) {
   const alertStatus = getCellAlertStatus(employee.id, date, alerts);
   const alertHtml = renderCellAlertBadge(alertStatus);
   const weekend = d.getDay() === 0 || d.getDay() === 6;
-  return `<td class="day-cell ${weekend ? "weekend" : ""}" data-employee-id="${employee.id}" data-date="${date}">${leaveHtml}${shiftHtml}${noteHtml}${alertHtml}</td>`;
+  const mismatch = hasAttendanceMismatch(cell);
+  const title = mismatch ? `排班 ${getScheduledHoursFromCell(cell).toFixed(1)}h / 卡勤 ${getAttendanceHoursFromCell(cell).toFixed(1)}h` : "";
+  return `<td class="day-cell ${weekend ? "weekend" : ""} ${mismatch ? "attendance-mismatch" : ""}" data-employee-id="${employee.id}" data-date="${date}" title="${escapeHtml(title)}">${leaveHtml}${shiftHtml}${noteHtml}${alertHtml}</td>`;
 }
 
 function renderMobileSchedule(days, visibleEmployees, compliance) {
@@ -331,8 +344,9 @@ function renderMobileSchedule(days, visibleEmployees, compliance) {
         const shift = getShift(shiftId);
         return shift ? `<span>${escapeHtml(shift.name)} ${shift.start}-${shift.end} · ${workHours(shift).toFixed(1)}h</span>` : "";
       }).join("");
+      const mismatch = hasAttendanceMismatch(cell);
       cards.push(`
-        <button class="mobile-schedule-card" type="button" data-employee-id="${employee.id}" data-date="${date}">
+        <button class="mobile-schedule-card ${mismatch ? "attendance-mismatch" : ""}" type="button" data-employee-id="${employee.id}" data-date="${date}">
           <div class="mobile-card-date">
             <strong>${d.getDate()}</strong>
             <span>${weekdays[d.getDay()]}</span>
