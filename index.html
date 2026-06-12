@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>耕讀園排班與人資系統</title>
-  <link rel="stylesheet" href="styles.css?v=20260611-logo-title">
+  <link rel="stylesheet" href="styles.css?v=20260612-leave-usage">
 </head>
 <body>
   <header class="app-header">
@@ -108,7 +108,7 @@
           <div id="employeeSummary" class="list"></div>
         </article>
         <article class="section-block">
-          <h3>我的特休使用</h3>
+          <h3>我的休假使用</h3>
           <div id="dashboardLeaveSummary" class="list"></div>
         </article>
       </div>
@@ -166,7 +166,6 @@
               <option value="請假">請假</option>
               <option value="病">病</option>
               <option value="事">事</option>
-              <option value="公">公</option>
               <option value="國定假日">國定假日</option>
             </select>
           </label>
@@ -175,19 +174,22 @@
         </form>
         <form id="leaveBalanceForm" class="section-block form">
           <input name="id" type="hidden">
-          <h3 id="leaveBalanceFormTitle">新增特休額度</h3>
+          <h3 id="leaveBalanceFormTitle">新增休假額度</h3>
           <label class="field"><span>員工</span><select name="employeeId" required></select></label>
           <label class="field"><span>年度</span><input name="year" type="number" min="2020" max="2100" value="2026" required></label>
+          <label class="field"><span>可用病假天數</span><input name="sickLeaveDays" type="number" min="0" step="0.5" value="30" required></label>
+          <label class="field"><span>可用事假天數</span><input name="personalLeaveDays" type="number" min="0" step="0.5" value="14" required></label>
           <label class="field"><span>可用特休天數</span><input name="annualLeaveDays" type="number" min="0" step="0.5" value="7" required></label>
+          <label class="field"><span>週年起日</span><input name="startsAt" type="date" value="2026-01-01" required></label>
           <label class="field"><span>有效期限</span><input name="expiresAt" type="date" value="2026-12-31" required></label>
           <label class="field"><span>備註</span><textarea name="note" rows="2" placeholder="例如：到職滿半年、展延、人工調整"></textarea></label>
           <div class="form-actions">
-            <button id="leaveBalanceSubmitBtn" class="button primary" type="submit">新增特休額度</button>
+            <button id="leaveBalanceSubmitBtn" class="button primary" type="submit">新增休假額度</button>
             <button id="cancelLeaveBalanceEditBtn" class="button secondary" type="button" hidden>取消編輯</button>
           </div>
         </form>
         <article class="section-block leave-management-block">
-          <h3>特休管理</h3>
+          <h3>休假管理</h3>
           <div id="leaveBalanceList" class="list"></div>
         </article>
         <article class="section-block">
@@ -241,7 +243,6 @@
             <option value="請假">請假</option>
             <option value="病">病</option>
             <option value="事">事</option>
-            <option value="公">公</option>
             <option value="國定假日">國定假日</option>
           </select>
         </label>
@@ -250,7 +251,7 @@
           <textarea id="noteInput" rows="3" placeholder="例如：補油、理級支援、換班原因"></textarea>
         </label>
         <section class="leave-balance-panel" aria-live="polite">
-          <h4>特休餘額</h4>
+          <h4>休假餘額</h4>
           <div id="cellLeaveBalanceDetails" class="cell-alert-details"></div>
         </section>
         <section class="cell-alert-panel" aria-live="polite">
@@ -266,6 +267,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=20260611-employee-edit"></script>
+  <script src="app.js?v=20260612-leave-usage"></script>
 </body>
 </html>
