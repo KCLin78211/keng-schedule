@@ -584,7 +584,7 @@ function renderProfile() {
       </div>
     </article>
     <article class="section-block profile-leave-block">
-      <h3>我的休假使用</h3>
+      <h3>休假使用</h3>
       ${balance ? `<p>週年期間：${escapeHtml(getLeavePeriodText(balance))}</p>` : ""}
       <div class="profile-leave-grid">${leaveContent}</div>
     </article>
