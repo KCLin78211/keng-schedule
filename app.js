@@ -31,7 +31,9 @@ const summaryColumns = [
   { key: "sick", label: "病", leaveType: "病" },
   { key: "personal", label: "事", leaveType: "事" },
   { key: "annual", label: "特休", leaveType: "特休" },
-  { key: "workDays", label: "出勤" }
+  { key: "workDays", label: "出勤天" },
+  { key: "scheduledHours", label: "排班h", unit: "h" },
+  { key: "attendanceHours", label: "卡勤h", unit: "h" }
 ];
 const trackedLeaveTypes = [
   { type: "病", label: "病假", quotaKey: "sickLeaveDays" },
@@ -254,20 +256,34 @@ function groupEmployeesByStore(employees) {
 function renderSummaryCells(employee, days) {
   const counts = getEmployeeMonthSummary(employee.id, days);
   return summaryColumns.map((column) => (
-    `<td class="summary-cell">${counts[column.key] || ""}</td>`
+    `<td class="summary-cell">${formatSummaryValue(counts[column.key], column)}</td>`
   )).join("");
 }
 
 function getEmployeeMonthSummary(employeeId, days) {
-  const counts = { sick: 0, personal: 0, annual: 0, workDays: 0 };
+  const counts = { sick: 0, personal: 0, annual: 0, workDays: 0, scheduledHours: 0, attendanceHours: 0 };
   days.forEach((date) => {
     const cell = state.schedule[cellKey(employeeId, date)] || emptyCell();
     if (cell.leaveType === "病") counts.sick += 1;
     if (cell.leaveType === "事") counts.personal += 1;
     if (cell.leaveType === "特休") counts.annual += 1;
     if (cell.shifts.length) counts.workDays += 1;
+    counts.scheduledHours += cell.shifts.map(getShift).filter(Boolean).reduce((sum, shift) => sum + workHours(shift), 0);
+    counts.attendanceHours += getAttendanceHoursFromCell(cell);
   });
   return counts;
+}
+
+function formatSummaryValue(value, column) {
+  if (!value) return "";
+  if (column.unit === "h") return `${Number(value).toFixed(1)}h`;
+  return value;
+}
+
+function getAttendanceHoursFromCell(cell) {
+  const note = cell?.note || "";
+  const match = note.match(/原表合計\s*([0-9]+(?:\.[0-9]+)?)h/);
+  return match ? Number(match[1]) : 0;
 }
 
 function getEmployeeMonthHourPlan(employee, days) {
@@ -1577,7 +1593,7 @@ function exportCsv() {
         }).filter(Boolean).join(" / ");
         return [cell.leaveType, shiftText, cell.note].filter(Boolean).join(" ");
       }),
-      ...summaryColumns.map((column) => summary[column.key] || "")
+      ...summaryColumns.map((column) => formatSummaryValue(summary[column.key], column))
     ]);
   });
   rows.push([]);

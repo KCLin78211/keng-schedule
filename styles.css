@@ -330,17 +330,18 @@ p {
   background: #fff36a !important;
   color: #1f2a24;
   font-weight: 800;
-  min-width: 48px !important;
+  min-width: 62px !important;
 }
 
 .summary-cell {
-  width: 52px;
-  min-width: 52px;
+  width: 64px;
+  min-width: 64px;
   padding: 8px 6px;
   text-align: center;
   vertical-align: middle !important;
   font-weight: 800;
   background: #fffef0;
+  font-size: 13px;
 }
 
 .weekday {
