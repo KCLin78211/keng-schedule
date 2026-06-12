@@ -289,7 +289,8 @@ function renderCell(employee, date, alerts) {
   }).join("");
   const leaveHtml = cell.leaveType ? `<div class="leave-mark">${escapeHtml(cell.leaveType)}</div>` : "";
   const noteHtml = cell.note ? `<div class="cell-note">${escapeHtml(cell.note)}</div>` : "";
-  const alertHtml = alerts.length ? `<div class="cell-alert">${alerts.length} 項警示</div>` : "";
+  const alertStatus = getCellAlertStatus(employee.id, date, alerts);
+  const alertHtml = renderCellAlertBadge(alertStatus);
   const weekend = d.getDay() === 0 || d.getDay() === 6;
   return `<td class="day-cell ${weekend ? "weekend" : ""}" data-employee-id="${employee.id}" data-date="${date}">${leaveHtml}${shiftHtml}${noteHtml}${alertHtml}</td>`;
 }
@@ -301,6 +302,7 @@ function renderMobileSchedule(days, visibleEmployees, compliance) {
     visibleEmployees.forEach((employee) => {
       const cell = state.schedule[cellKey(employee.id, date)] || emptyCell();
       const alerts = compliance[cellKey(employee.id, date)] || [];
+      const alertStatus = getCellAlertStatus(employee.id, date, alerts);
       const hasContent = cell.shifts.length || cell.leaveType || cell.note || alerts.length;
       if (!hasContent) return;
       const d = new Date(`${date}T00:00:00`);
@@ -319,7 +321,7 @@ function renderMobileSchedule(days, visibleEmployees, compliance) {
             <div>${shiftText || `<span class="mobile-muted">${escapeHtml(cell.leaveType || "未排班")}</span>`}</div>
             ${cell.leaveType ? `<em>${escapeHtml(cell.leaveType)}</em>` : ""}
             ${cell.note ? `<small>${escapeHtml(cell.note)}</small>` : ""}
-            ${alerts.length ? `<b>${alerts.length} 項警示</b>` : ""}
+            ${renderMobileAlertBadge(alertStatus)}
           </div>
         </button>
       `);
@@ -376,9 +378,32 @@ function renderCellAlertDetails(alerts) {
     alertBox.innerHTML = `<div class="cell-alert-empty">目前沒有此日期的法遵警示。</div>`;
     return;
   }
+  const { employeeId, date } = state.selectedCell;
+  const actions = getCellAlertActions(employeeId, date);
   alertBox.innerHTML = alerts.map((alert) => (
-    `<article class="cell-alert-item ${alert.severity === "block" ? "severity-block" : "severity-warn"}"><div><strong>${alert.severity === "block" ? "阻擋" : "警告"} · ${escapeHtml(getComplianceCodeLabel(alert.code))}</strong><span>${escapeHtml(alert.message)}</span></div><em>${escapeHtml(alert.suggestion)}</em></article>`
+    renderCellAlertItem(alert, actions)
   )).join("");
+}
+
+function renderCellAlertItem(alert, actions) {
+  const actionKey = getAlertActionKey(alert);
+  const actionText = actions[actionKey] || "";
+  const handled = actionText.trim().length > 0;
+  const severityLabel = alert.severity === "block" ? "阻擋" : "警告";
+  const severityClass = handled ? "severity-handled" : (alert.severity === "block" ? "severity-block" : "severity-warn");
+  return `
+    <article class="cell-alert-item ${severityClass}">
+      <div>
+        <strong>${severityLabel} · ${escapeHtml(getComplianceCodeLabel(alert.code))}${handled ? "（已處理）" : ""}</strong>
+        <span>${escapeHtml(alert.message)}</span>
+      </div>
+      <em>${escapeHtml(alert.suggestion)}</em>
+      <label class="alert-action-field">
+        <span>處理方式</span>
+        <textarea rows="2" data-alert-action-key="${escapeHtml(actionKey)}" placeholder="例如：已確認補休日期、已調整班表、已留存同意紀錄">${escapeHtml(actionText)}</textarea>
+      </label>
+    </article>
+  `;
 }
 
 function saveDialogCell() {
@@ -395,10 +420,18 @@ function saveDialogCell() {
 
 function getDialogCellValue() {
   const selectedShifts = Array.from(document.getElementById("shiftSelect").selectedOptions).map((option) => option.value);
+  const currentCell = state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] || emptyCell();
+  const complianceActions = { ...(currentCell.complianceActions || {}) };
+  document.querySelectorAll("[data-alert-action-key]").forEach((input) => {
+    const value = input.value.trim();
+    if (value) complianceActions[input.dataset.alertActionKey] = value;
+    else delete complianceActions[input.dataset.alertActionKey];
+  });
   return {
     shifts: selectedShifts,
     leaveType: document.getElementById("leaveType").value,
-    note: document.getElementById("noteInput").value.trim()
+    note: document.getElementById("noteInput").value.trim(),
+    complianceActions
   };
 }
 
@@ -623,7 +656,10 @@ function metric(label, value) {
 
 function renderComplianceItem(item) {
   const employee = state.employees.find((entry) => entry.id === item.employeeId);
-  return `<div class="list-item severity-${item.severity}"><strong>${escapeHtml(employee.name)} · ${escapeHtml(item.scope)} · ${escapeHtml(getComplianceCodeLabel(item.code))}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(item.suggestion)}</span></div>`;
+  const actionText = getComplianceActionText(item);
+  const handled = actionText.length > 0;
+  const severityClass = handled ? "severity-ok" : `severity-${item.severity}`;
+  return `<div class="list-item ${severityClass}"><strong>${escapeHtml(employee.name)} · ${escapeHtml(item.scope)} · ${escapeHtml(getComplianceCodeLabel(item.code))}${handled ? "（已處理）" : ""}</strong><span>${escapeHtml(item.message)}</span><span>${escapeHtml(handled ? `處理方式：${actionText}` : item.suggestion)}</span></div>`;
 }
 
 function renderLeaveWarningItem(item) {
@@ -1246,6 +1282,45 @@ function getComplianceCodeLabel(code) {
   return complianceCodeLabels[code] || code;
 }
 
+function getAlertActionKey(alert) {
+  return alert.rawCode || alert.code;
+}
+
+function getCellAlertActions(employeeId, date) {
+  const cell = state.schedule[cellKey(employeeId, date)] || emptyCell();
+  return cell.complianceActions || {};
+}
+
+function isAlertHandled(alert, actions) {
+  return Boolean((actions[getAlertActionKey(alert)] || "").trim());
+}
+
+function getCellAlertStatus(employeeId, date, alerts) {
+  const actions = getCellAlertActions(employeeId, date);
+  const handled = alerts.filter((alert) => isAlertHandled(alert, actions)).length;
+  return { total: alerts.length, handled, pending: alerts.length - handled };
+}
+
+function renderCellAlertBadge(status) {
+  if (!status.total) return "";
+  if (!status.pending) return `<div class="cell-alert handled">${status.total} 項警示（已處理）</div>`;
+  if (status.handled) return `<div class="cell-alert">${status.pending} 項警示 / ${status.handled} 項已處理</div>`;
+  return `<div class="cell-alert">${status.pending} 項警示</div>`;
+}
+
+function renderMobileAlertBadge(status) {
+  if (!status.total) return "";
+  if (!status.pending) return `<b class="handled">${status.total} 項警示（已處理）</b>`;
+  if (status.handled) return `<b>${status.pending} 項警示 / ${status.handled} 項已處理</b>`;
+  return `<b>${status.pending} 項警示</b>`;
+}
+
+function getComplianceActionText(item) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(item.scope)) return "";
+  const actions = getCellAlertActions(item.employeeId, item.scope);
+  return (actions[getAlertActionKey(item)] || "").trim();
+}
+
 function getEmployeeTotals() {
   const totals = {};
   state.employees.forEach((employee) => {
@@ -1370,11 +1445,11 @@ function cellKey(employeeId, date) {
 }
 
 function emptyCell() {
-  return { shifts: [], leaveType: "", note: "", createdBy: "", updatedBy: "" };
+  return { shifts: [], leaveType: "", note: "", complianceActions: {}, createdBy: "", updatedBy: "" };
 }
 
 function cloneCell(cell) {
-  return { ...cell, shifts: [...cell.shifts] };
+  return { ...cell, shifts: [...cell.shifts], complianceActions: { ...(cell.complianceActions || {}) } };
 }
 
 function csvCell(value) {

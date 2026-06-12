@@ -384,6 +384,11 @@ p {
   font-weight: 700;
 }
 
+.cell-alert.handled,
+.mobile-card-main b.handled {
+  color: var(--ok);
+}
+
 .cell-alert-panel,
 .leave-balance-panel {
   display: grid;
@@ -427,6 +432,11 @@ p {
   gap: 6px;
 }
 
+.cell-alert-item.severity-handled {
+  border-left: 4px solid var(--ok);
+  background: #f3fbf6;
+}
+
 .cell-alert-item strong,
 .cell-alert-item span,
 .cell-alert-item em {
@@ -442,6 +452,23 @@ p {
 
 .cell-alert-item em {
   font-style: normal;
+}
+
+.alert-action-field {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.alert-action-field span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.alert-action-field textarea {
+  min-height: 62px;
+  resize: vertical;
 }
 
 .metrics {
