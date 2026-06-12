@@ -1362,14 +1362,14 @@ async function loadCloudData() {
       applyDatabaseSnapshot(result.data);
       seedSchedule();
       saveLocalSnapshot();
-      setCloudStatus("saved", "已載入 Google Sheets 最新資料", new Date().toISOString());
+      setCloudStatus("saved", "Sheets 已同步", new Date().toISOString());
       renderAll();
     } else {
       saveLocalSnapshot();
-      await persistCloudData("Sheet 目前是空的，已送出目前資料初始化");
+      await persistCloudData("初始化 Sheets");
     }
   } catch (error) {
-    setCloudStatus("error", `雲端讀取失敗，先使用本機資料：${error.message}`);
+    setCloudStatus("error", "讀取失敗，使用本機資料");
     renderCloudStatus();
   }
 }
@@ -1380,7 +1380,7 @@ function afterDataChange() {
   persistCloudData();
 }
 
-async function persistCloudData(message = "正在同步 Google Sheets") {
+async function persistCloudData(message = "同步 Sheets 中") {
   setCloudStatus("saving", message);
   renderCloudStatus();
   try {
@@ -1390,10 +1390,10 @@ async function persistCloudData(message = "正在同步 Google Sheets") {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: "saveAll", data: getDatabaseSnapshot() })
     });
-    setCloudStatus("saved", "已送出 Google Sheets 儲存", new Date().toISOString());
+    setCloudStatus("saved", "Sheets 已儲存", new Date().toISOString());
     saveLocalSnapshot();
   } catch (error) {
-    setCloudStatus("error", `雲端儲存失敗，已保留本機暫存：${error.message}`);
+    setCloudStatus("error", "儲存失敗，已暫存本機");
   }
   renderCloudStatus();
 }
