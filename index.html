@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>耕讀園排班與人資系統</title>
-  <link rel="stylesheet" href="styles.css?v=20260612-leave-usage">
+  <link rel="stylesheet" href="styles.css?v=20260612-profile">
 </head>
 <body>
   <header class="app-header">
@@ -40,6 +40,7 @@
   <main class="app-shell">
     <nav class="tabs" aria-label="主要功能">
       <button class="tab active" type="button" data-tab="schedule">排班表</button>
+      <button class="tab" type="button" data-tab="profile">個人資料</button>
       <button class="tab" type="button" data-tab="dashboard">人資儀表板</button>
       <button class="tab" type="button" data-tab="admin">資料維護</button>
       <button class="tab" type="button" data-tab="rules">法遵規則</button>
@@ -70,6 +71,16 @@
         <table id="scheduleTable" class="schedule-table"></table>
       </div>
       <div id="mobileScheduleList" class="mobile-schedule-list" aria-label="手機版排班清單"></div>
+    </section>
+
+    <section id="profile" class="panel" aria-labelledby="profile-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="profile-title">個人資料</h2>
+          <p>查看入職、身分與目前週年制休假使用情形。</p>
+        </div>
+      </div>
+      <div id="profileDetails" class="profile-grid"></div>
     </section>
 
     <section id="dashboard" class="panel" aria-labelledby="dashboard-title">
@@ -267,6 +278,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=20260612-leave-usage"></script>
+  <script src="app.js?v=20260612-profile"></script>
 </body>
 </html>

@@ -144,6 +144,7 @@ function renderAll() {
   renderLegend();
   populateDialogOptions();
   renderSchedule();
+  renderProfile();
   renderDashboard();
   renderAdmin();
 }
@@ -548,6 +549,60 @@ function renderDashboardLeaveSummary(employees) {
       return `<div class="list-item ${getLeaveExpiryClass(balance.expiresAt)}"><strong>${escapeHtml(employee?.name || "未指定員工")} · ${balance.year} 年休假</strong>${renderLeaveUsageLines(balance).map((line) => `<span>${line}</span>`).join("")}<span>期間：${escapeHtml(getLeavePeriodText(balance))}</span></div>`;
     }).join("")
     : `<div class="list-item"><strong>尚未設定休假額度</strong><span>請由人資在資料維護建立週年制休假額度。</span></div>`;
+}
+
+function renderProfile() {
+  const employee = state.employees.find((item) => item.id === state.currentEmployeeId) || state.employees.find((item) => item.active);
+  const profile = document.getElementById("profileDetails");
+  if (!profile) return;
+  if (!employee) {
+    profile.innerHTML = `<div class="section-block"><h3>尚未建立員工資料</h3><p>請由人資先在資料維護新增員工。</p></div>`;
+    return;
+  }
+
+  const monthDays = getDaysInMonth(state.month);
+  const hourPlan = getEmployeeMonthHourPlan(employee, monthDays);
+  const balance = state.leaveBalances.find((item) => item.employeeId === employee.id && isBalanceVisibleInMonth(item, state.month));
+  const leaveContent = balance
+    ? trackedLeaveTypes.map((leave) => renderProfileLeaveCard(balance, leave)).join("")
+    : `<div class="list-item"><strong>尚未設定休假額度</strong><span>目前月份沒有可用的週年制休假資料。</span></div>`;
+
+  profile.innerHTML = `
+    <article class="section-block profile-card">
+      <h3>${escapeHtml(employee.name)}</h3>
+      <div class="profile-facts">
+        <span><strong>職稱</strong>${escapeHtml(employee.title)}</span>
+        <span><strong>身分</strong>${escapeHtml(employee.type)}</span>
+        <span><strong>入職日</strong>${escapeHtml(employee.startDate)}</span>
+        <span><strong>工時制度</strong>${escapeHtml(employee.policy)}</span>
+        <span><strong>契約工時</strong>${employee.contractHours}h/週</span>
+        <span><strong>門市/部門</strong>${escapeHtml(employee.department)}</span>
+      </div>
+      <div class="profile-hours">
+        <strong>${hourPlan.scheduled.toFixed(1)}h</strong>
+        <span>本月已排，距離參考工時尚餘 ${hourPlan.remaining.toFixed(1)}h</span>
+      </div>
+    </article>
+    <article class="section-block profile-leave-block">
+      <h3>我的休假使用</h3>
+      ${balance ? `<p>週年期間：${escapeHtml(getLeavePeriodText(balance))}</p>` : ""}
+      <div class="profile-leave-grid">${leaveContent}</div>
+    </article>
+  `;
+}
+
+function renderProfileLeaveCard(balance, leave) {
+  const usage = getLeaveUsage(balance, leave);
+  const usedDates = usage.dates.length ? formatUsedDates(usage.dates) : "尚無";
+  return `
+    <div class="leave-usage-card">
+      <strong>${escapeHtml(leave.label)}</strong>
+      <span>可用 ${formatDays(usage.quota)} 天</span>
+      <span>已用 ${formatDays(usage.used)} 天</span>
+      <b>剩餘 ${formatDays(usage.remaining)} 天</b>
+      <small>已用日期：${escapeHtml(usedDates)}</small>
+    </div>
+  `;
 }
 
 function metric(label, value) {

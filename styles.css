@@ -481,6 +481,62 @@ p {
   gap: 14px;
 }
 
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.4fr);
+  gap: 14px;
+}
+
+.profile-card,
+.profile-leave-block {
+  box-shadow: var(--shadow);
+}
+
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-facts span,
+.profile-hours,
+.leave-usage-card {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.profile-facts strong,
+.profile-hours span,
+.leave-usage-card span,
+.leave-usage-card small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.profile-hours {
+  margin-top: 12px;
+  background: var(--surface-2);
+}
+
+.profile-hours strong {
+  font-size: 28px;
+}
+
+.profile-leave-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.leave-usage-card b {
+  color: var(--brand);
+  font-size: 18px;
+}
+
 .dashboard-grid {
   grid-template-columns: 1.2fr 1fr 1fr;
 }
@@ -625,6 +681,7 @@ p {
   }
 
   .metrics,
+  .profile-grid,
   .dashboard-grid,
   .admin-grid,
   .rules-grid {
@@ -633,6 +690,11 @@ p {
 
   .leave-management-block {
     grid-column: auto;
+  }
+
+  .profile-facts,
+  .profile-leave-grid {
+    grid-template-columns: 1fr;
   }
 
   .schedule-wrap {
