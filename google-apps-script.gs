@@ -21,6 +21,9 @@ const TABLES = {
     "id", "employeeId", "employeeName", "leaveType", "startDate", "endDate", "hours",
     "status", "note", "updatedAt"
   ],
+  import_sources: [
+    "id", "store", "month", "sourceType", "fileName", "localPath", "status", "note", "updatedAt"
+  ],
   app_meta: ["key", "value", "updatedAt"]
 };
 
@@ -131,6 +134,7 @@ function loadDatabase() {
       hours: Number(normalized.hours || 0)
     };
     }).filter((row) => row.employeeId),
+    importSources: readTable("import_sources"),
     appMeta: readTable("app_meta")
   };
 }
@@ -179,6 +183,11 @@ function saveDatabase(data) {
     ...record,
     employeeId: record.employeeId || "",
     employeeName: employeeNameById[record.employeeId] || record.employeeId || "",
+    updatedAt: now
+  })));
+
+  writeTable("import_sources", (data.importSources || []).map((source) => ({
+    ...source,
     updatedAt: now
   })));
 
