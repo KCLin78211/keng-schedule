@@ -733,6 +733,7 @@ function addEmployee(event) {
       state.schedule[cellKey(id, date)] = emptyCell();
     });
   }
+  saveEmployeeLeaveBalanceFromForm(id, form);
   resetEmployeeForm();
   renderAll();
 }
@@ -772,6 +773,7 @@ function editEmployee(id) {
   form.elements.contractHours.value = employee.contractHours;
   form.elements.startDate.value = employee.startDate;
   form.elements.department.value = employee.department;
+  setEmployeeLeaveFields(form, getEditableEmployeeLeaveBalance(employee.id));
   state.editingEmployeeId = id;
   document.getElementById("employeeFormTitle").textContent = `修改員工：${employee.name}`;
   document.getElementById("employeeSubmitBtn").textContent = "儲存修改";
@@ -799,10 +801,47 @@ function resetEmployeeForm() {
   form.elements.contractHours.value = 40;
   form.elements.startDate.value = "2025-01-01";
   form.elements.department.value = "台南門市";
+  setEmployeeLeaveFields(form, null);
   state.editingEmployeeId = null;
   document.getElementById("employeeFormTitle").textContent = "新增員工";
   document.getElementById("employeeSubmitBtn").textContent = "新增員工";
   document.getElementById("cancelEmployeeEditBtn").hidden = true;
+}
+
+function getEditableEmployeeLeaveBalance(employeeId) {
+  return state.leaveBalances.find((item) => item.employeeId === employeeId && isBalanceVisibleInMonth(item, state.month))
+    || state.leaveBalances.find((item) => item.employeeId === employeeId && item.year === Number(state.month.slice(0, 4)));
+}
+
+function setEmployeeLeaveFields(form, balance) {
+  const year = state.month.slice(0, 4);
+  form.elements.sickLeaveDays.value = balance?.sickLeaveDays ?? 30;
+  form.elements.personalLeaveDays.value = balance?.personalLeaveDays ?? 14;
+  form.elements.annualLeaveDays.value = balance?.annualLeaveDays ?? 7;
+  form.elements.leaveStartsAt.value = balance ? getLeaveStartsAt(balance) : `${year}-01-01`;
+  form.elements.leaveExpiresAt.value = balance?.expiresAt || `${year}-12-31`;
+}
+
+function saveEmployeeLeaveBalanceFromForm(employeeId, formData) {
+  const existing = getEditableEmployeeLeaveBalance(employeeId);
+  const startsAt = formData.get("leaveStartsAt");
+  const balanceData = {
+    id: existing?.id || `lb${Date.now()}`,
+    employeeId,
+    year: Number(startsAt.slice(0, 4)),
+    sickLeaveDays: Number(formData.get("sickLeaveDays")),
+    personalLeaveDays: Number(formData.get("personalLeaveDays")),
+    annualLeaveDays: Number(formData.get("annualLeaveDays")),
+    startsAt,
+    expiresAt: formData.get("leaveExpiresAt"),
+    note: existing?.note || ""
+  };
+  const existingIndex = state.leaveBalances.findIndex((balance) => balance.id === balanceData.id);
+  if (existingIndex >= 0) {
+    state.leaveBalances[existingIndex] = balanceData;
+  } else {
+    state.leaveBalances.push(balanceData);
+  }
 }
 
 function editShift(id) {

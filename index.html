@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>耕讀園排班與人資系統</title>
-  <link rel="stylesheet" href="styles.css?v=20260612-profile">
+  <link rel="stylesheet" href="styles.css?v=20260612-employee-leave">
 </head>
 <body>
   <header class="app-header">
@@ -142,6 +142,14 @@
           <label class="field"><span>每週契約工時</span><input name="contractHours" type="number" min="1" max="40" value="40" required></label>
           <label class="field"><span>到職日</span><input name="startDate" type="date" value="2025-01-01" required></label>
           <label class="field"><span>門市/部門</span><input name="department" value="台南門市" required></label>
+          <div class="form-subsection">
+            <strong>休假額度設定</strong>
+            <label class="field"><span>可用病假天數</span><input name="sickLeaveDays" type="number" min="0" step="0.5" value="30" required></label>
+            <label class="field"><span>可用事假天數</span><input name="personalLeaveDays" type="number" min="0" step="0.5" value="14" required></label>
+            <label class="field"><span>可用特休天數</span><input name="annualLeaveDays" type="number" min="0" step="0.5" value="7" required></label>
+            <label class="field"><span>週年起日</span><input name="leaveStartsAt" type="date" value="2026-01-01" required></label>
+            <label class="field"><span>有效期限</span><input name="leaveExpiresAt" type="date" value="2026-12-31" required></label>
+          </div>
           <div class="form-actions">
             <button id="employeeSubmitBtn" class="button primary" type="submit">新增員工</button>
             <button id="cancelEmployeeEditBtn" class="button secondary" type="button" hidden>取消編輯</button>
@@ -278,6 +286,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=20260612-leave-title"></script>
+  <script src="app.js?v=20260612-employee-leave"></script>
 </body>
 </html>

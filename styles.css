@@ -563,6 +563,19 @@ p {
   gap: 10px;
 }
 
+.form-subsection {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.form-subsection strong {
+  font-size: 14px;
+}
+
 .form-actions,
 .item-actions {
   display: flex;
