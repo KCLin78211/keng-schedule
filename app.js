@@ -326,7 +326,8 @@ function renderCell(employee, date, alerts) {
   const weekend = d.getDay() === 0 || d.getDay() === 6;
   const mismatch = hasAttendanceMismatch(cell);
   const title = mismatch ? `排班 ${getScheduledHoursFromCell(cell).toFixed(1)}h / 卡勤 ${getAttendanceHoursFromCell(cell).toFixed(1)}h` : "";
-  return `<td class="day-cell ${weekend ? "weekend" : ""} ${mismatch ? "attendance-mismatch" : ""}" data-employee-id="${employee.id}" data-date="${date}" title="${escapeHtml(title)}">${leaveHtml}${shiftHtml}${noteHtml}${alertHtml}</td>`;
+  const mismatchHtml = mismatch ? `<div class="attendance-mismatch-badge">排勤差異</div>` : "";
+  return `<td class="day-cell ${weekend ? "weekend" : ""} ${mismatch ? "attendance-mismatch" : ""}" data-employee-id="${employee.id}" data-date="${date}" title="${escapeHtml(title)}">${leaveHtml}${shiftHtml}${noteHtml}${mismatchHtml}${alertHtml}</td>`;
 }
 
 function renderMobileSchedule(days, visibleEmployees, compliance) {
@@ -356,6 +357,7 @@ function renderMobileSchedule(days, visibleEmployees, compliance) {
             <div>${shiftText || `<span class="mobile-muted">${escapeHtml(cell.leaveType || "未排班")}</span>`}</div>
             ${cell.leaveType ? `<em>${escapeHtml(cell.leaveType)}</em>` : ""}
             ${cell.note ? `<small>${escapeHtml(cell.note)}</small>` : ""}
+            ${mismatch ? `<b class="attendance-mismatch-badge">排勤差異</b>` : ""}
             ${renderMobileAlertBadge(alertStatus)}
           </div>
         </button>
