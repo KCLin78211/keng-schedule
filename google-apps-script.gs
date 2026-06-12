@@ -98,32 +98,39 @@ function loadDatabase() {
       color: row.color
     })),
     schedule: readTable("schedule_cells").reduce((result, row) => {
-      const employeeId = row.employeeId || getEmployeeIdByName(row.employeeName, employees);
-      const key = row.key || [row.month, employeeId, row.date].join(":");
-      if (!employeeId || !row.date) return result;
+      const normalized = normalizeScheduleRow(row, employees);
+      const employeeId = normalized.employeeId || getEmployeeIdByName(normalized.employeeName, employees);
+      const key = normalized.key || [normalized.month, employeeId, normalized.date].join(":");
+      if (!employeeId || !normalized.date) return result;
       result[key] = {
-        shifts: parseJson(row.shiftsJson, []),
-        leaveType: row.leaveType || "",
-        note: row.note || "",
-        complianceActions: parseJson(row.complianceActionsJson, {}),
-        createdBy: row.createdBy || "",
-        updatedBy: row.updatedBy || ""
+        shifts: parseJson(normalized.shiftsJson, []),
+        leaveType: normalized.leaveType || "",
+        note: normalized.note || "",
+        complianceActions: parseJson(normalized.complianceActionsJson, {}),
+        createdBy: normalized.createdBy || "",
+        updatedBy: normalized.updatedBy || ""
       };
       return result;
     }, {}),
-    leaveBalances: readTable("leave_balances").map((row) => ({
-      ...row,
-      employeeId: row.employeeId || getEmployeeIdByName(row.employeeName, employees),
-      year: Number(row.year || 0),
-      sickLeaveDays: Number(row.sickLeaveDays || 0),
-      personalLeaveDays: Number(row.personalLeaveDays || 0),
-      annualLeaveDays: Number(row.annualLeaveDays || 0)
-    })).filter((row) => row.employeeId),
-    leaveRecords: readTable("leave_records").map((row) => ({
-      ...row,
-      employeeId: row.employeeId || getEmployeeIdByName(row.employeeName, employees),
-      hours: Number(row.hours || 0)
-    })).filter((row) => row.employeeId),
+    leaveBalances: readTable("leave_balances").map((row) => {
+      const normalized = normalizeLeaveBalanceRow(row, employees);
+      return {
+      ...normalized,
+      employeeId: normalized.employeeId || getEmployeeIdByName(normalized.employeeName, employees),
+      year: Number(normalized.year || 0),
+      sickLeaveDays: Number(normalized.sickLeaveDays || 0),
+      personalLeaveDays: Number(normalized.personalLeaveDays || 0),
+      annualLeaveDays: Number(normalized.annualLeaveDays || 0)
+    };
+    }).filter((row) => row.employeeId),
+    leaveRecords: readTable("leave_records").map((row) => {
+      const normalized = normalizeLeaveRecordRow(row, employees);
+      return {
+      ...normalized,
+      employeeId: normalized.employeeId || getEmployeeIdByName(normalized.employeeName, employees),
+      hours: Number(normalized.hours || 0)
+    };
+    }).filter((row) => row.employeeId),
     appMeta: readTable("app_meta")
   };
 }
@@ -185,7 +192,7 @@ function readTable(name) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const headers = TABLES[name];
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getDisplayValues();
   return values
     .filter((row) => row.some((cell) => cell !== ""))
     .map((row) => headers.reduce((object, header, index) => {
@@ -213,6 +220,78 @@ function getEmployeeIdByName(employeeName, employees) {
   if (employees.some((item) => item.id === employeeName)) return employeeName;
   const employee = employees.find((item) => item.name === employeeName);
   return employee?.id || "";
+}
+
+function getEmployeeNameById(employeeId, employees) {
+  const employee = employees.find((item) => item.id === employeeId);
+  return employee?.name || "";
+}
+
+function normalizeScheduleRow(row, employees) {
+  const normalized = { ...row };
+  if (isDateString(row.employeeName) && !isDateString(row.date)) {
+    normalized.employeeName = getEmployeeNameById(row.employeeId, employees) || row.employeeId || "";
+    normalized.employeeId = getEmployeeIdByName(row.employeeId, employees) || row.employeeId || "";
+    normalized.date = row.employeeName || "";
+    normalized.shiftsJson = row.date || "[]";
+    normalized.leaveType = row.shiftsJson || "";
+    normalized.note = row.leaveType || "";
+    normalized.complianceActionsJson = row.note || "{}";
+    normalized.createdBy = row.complianceActionsJson || "";
+    normalized.updatedBy = row.createdBy || "";
+    normalized.updatedAt = row.updatedBy || "";
+  }
+  if (!normalized.employeeName && normalized.employeeId) {
+    normalized.employeeName = getEmployeeNameById(normalized.employeeId, employees);
+  }
+  return normalized;
+}
+
+function normalizeLeaveBalanceRow(row, employees) {
+  const normalized = { ...row };
+  if (isYearValue(row.employeeName) && !isYearValue(row.year)) {
+    normalized.employeeName = getEmployeeNameById(row.employeeId, employees) || row.employeeId || "";
+    normalized.employeeId = getEmployeeIdByName(row.employeeId, employees) || row.employeeId || "";
+    normalized.year = row.employeeName || "";
+    normalized.sickLeaveDays = row.year || "";
+    normalized.personalLeaveDays = row.sickLeaveDays || "";
+    normalized.annualLeaveDays = row.personalLeaveDays || "";
+    normalized.startsAt = row.annualLeaveDays || "";
+    normalized.expiresAt = row.startsAt || "";
+    normalized.note = row.expiresAt || "";
+    normalized.updatedAt = row.note || "";
+  }
+  if (!normalized.employeeName && normalized.employeeId) {
+    normalized.employeeName = getEmployeeNameById(normalized.employeeId, employees);
+  }
+  return normalized;
+}
+
+function normalizeLeaveRecordRow(row, employees) {
+  const normalized = { ...row };
+  if (row.employeeName && !getEmployeeIdByName(row.employeeName, employees) && getEmployeeIdByName(row.employeeId, employees)) {
+    normalized.employeeName = getEmployeeNameById(row.employeeId, employees) || row.employeeId || "";
+    normalized.employeeId = getEmployeeIdByName(row.employeeId, employees) || row.employeeId || "";
+    normalized.leaveType = row.employeeName || "";
+    normalized.startDate = row.leaveType || "";
+    normalized.endDate = row.startDate || "";
+    normalized.hours = row.endDate || "";
+    normalized.status = row.hours || "";
+    normalized.note = row.status || "";
+    normalized.updatedAt = row.note || "";
+  }
+  if (!normalized.employeeName && normalized.employeeId) {
+    normalized.employeeName = getEmployeeNameById(normalized.employeeId, employees);
+  }
+  return normalized;
+}
+
+function isDateString(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function isYearValue(value) {
+  return /^\d{4}$/.test(String(value || ""));
 }
 
 function writeTable(name, objects) {
