@@ -164,9 +164,6 @@ function enforceRoleDefaults() {
   if (!canSeeAdmin && state.activeTab === "admin") {
     state.activeTab = "schedule";
   }
-  if (state.roleView === "employee") {
-    state.scheduleEmployeeFilter = state.currentEmployeeId;
-  }
 }
 
 function canAccessAdminViews() {
@@ -198,9 +195,7 @@ function renderSchedule() {
   const days = getDaysInMonth(state.month);
   const compliance = groupByCell(runCompliance());
   const visibleEmployees = state.employees.filter((employee) => (
-    employee.active && (canSeeAllEmployees()
-      ? (state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter)
-      : employee.id === state.currentEmployeeId)
+    employee.active && (state.scheduleEmployeeFilter === "all" || employee.id === state.scheduleEmployeeFilter)
   ));
   const head = [
     `<tr><th class="employee-head">姓名 / 職稱</th>`,
@@ -443,18 +438,11 @@ function populateDialogOptions() {
 
   const scheduleEmployeeFilter = document.getElementById("scheduleEmployeeFilter");
   const currentScheduleEmployee = state.scheduleEmployeeFilter || "all";
-  if (canSeeAllEmployees()) {
-    scheduleEmployeeFilter.disabled = false;
-    scheduleEmployeeFilter.innerHTML = `<option value="all">全部員工</option>` + activeEmployees.map((employee) => (
-      `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
-    )).join("");
-    state.scheduleEmployeeFilter = activeEmployees.some((employee) => employee.id === currentScheduleEmployee) ? currentScheduleEmployee : "all";
-  } else {
-    scheduleEmployeeFilter.disabled = true;
-    state.scheduleEmployeeFilter = state.currentEmployeeId;
-    const employee = activeEmployees.find((item) => item.id === state.currentEmployeeId);
-    scheduleEmployeeFilter.innerHTML = `<option value="${state.currentEmployeeId}">${escapeHtml(employee?.name || "我的班表")}</option>`;
-  }
+  scheduleEmployeeFilter.disabled = false;
+  scheduleEmployeeFilter.innerHTML = `<option value="all">全部員工</option>` + activeEmployees.map((employee) => (
+    `<option value="${employee.id}">${escapeHtml(employee.name)} · ${escapeHtml(employee.title)}</option>`
+  )).join("");
+  state.scheduleEmployeeFilter = activeEmployees.some((employee) => employee.id === currentScheduleEmployee) ? currentScheduleEmployee : "all";
   scheduleEmployeeFilter.value = state.scheduleEmployeeFilter;
 
   const employeeFilter = document.getElementById("employeeFilter");
