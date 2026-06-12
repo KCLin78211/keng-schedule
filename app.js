@@ -8,13 +8,13 @@ const state = {
   scheduleEmployeeFilter: "all",
   mobileScheduleView: "cards",
   employees: [
-    { id: "e1", name: "季恆", title: "襄理", type: "正職", startDate: "2022-03-01", policy: "一般工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e2", name: "章伶", title: "主任", type: "正職", startDate: "2021-11-15", policy: "一般工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e3", name: "祖華", title: "儲備", type: "正職", startDate: "2024-01-10", policy: "一般工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e4", name: "子捷", title: "專員", type: "正職", startDate: "2024-05-20", policy: "一般工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e5", name: "靜怡", title: "專員", type: "正職", startDate: "2023-09-01", policy: "一般工時", contractHours: 40, active: true, department: "台南門市" },
-    { id: "e6", name: "若芸", title: "早計", type: "兼職", startDate: "2025-02-18", policy: "一般工時", contractHours: 24, active: true, department: "台南門市" },
-    { id: "e7", name: "柏亨", title: "晚計", type: "兼職", startDate: "2025-08-01", policy: "一般工時", contractHours: 20, active: true, department: "台南門市" }
+    { id: "e1", name: "季恆", title: "襄理", type: "正職", startDate: "2022-03-01", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
+    { id: "e2", name: "章伶", title: "主任", type: "正職", startDate: "2021-11-15", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
+    { id: "e3", name: "祖華", title: "儲備", type: "正職", startDate: "2024-01-10", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
+    { id: "e4", name: "子捷", title: "專員", type: "正職", startDate: "2024-05-20", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
+    { id: "e5", name: "靜怡", title: "專員", type: "正職", startDate: "2023-09-01", policy: "四週變形工時", contractHours: 40, active: true, department: "台南門市" },
+    { id: "e6", name: "若芸", title: "早計", type: "兼職", startDate: "2025-02-18", policy: "四週變形工時", contractHours: 24, active: true, department: "台南門市" },
+    { id: "e7", name: "柏亨", title: "晚計", type: "兼職", startDate: "2025-08-01", policy: "四週變形工時", contractHours: 20, active: true, department: "台南門市" }
   ],
   shifts: [
     { id: "s1", name: "早A", start: "10:00", end: "17:00", breakMinutes: 60, crossesMidnight: false, role: "早計", color: "#e8af32" },
@@ -707,7 +707,7 @@ function addEmployee(event) {
     title: form.get("title").trim(),
     type: form.get("type"),
     startDate: form.get("startDate"),
-    policy: "一般工時",
+    policy: "四週變形工時",
     contractHours: Number(form.get("contractHours")),
     active: true,
     department: form.get("department").trim()
@@ -1021,7 +1021,7 @@ function formatDays(value) {
   return Number(value).toFixed(1).replace(/\\.0$/, "");
 }
 
-function runCompliance() {
+function runComplianceLegacy() {
   const results = [];
   const days = getDaysInMonth(state.month);
   state.employees.forEach((employee) => {
@@ -1097,6 +1097,118 @@ function runCompliance() {
 
     if (monthlyOvertime > 46) {
       results.push(compliance(employee.id, state.month, "MONTH_OT_46H", "block", `本月加班風險 ${monthlyOvertime.toFixed(1)} 小時，超過 46 小時。`, "調整跨週排班並重新檢核。"));
+    }
+  });
+  return results;
+}
+
+function runCompliance() {
+  const results = [];
+  const days = getDaysInMonth(state.month);
+  state.employees.forEach((employee) => {
+    let consecutive = 0;
+    let previousLastEnd = null;
+    let monthlyOvertime = 0;
+    const weekBuckets = new Map();
+    const twoWeekBuckets = new Map();
+    const fourWeekBuckets = new Map();
+
+    days.forEach((date) => {
+      const cell = state.schedule[cellKey(employee.id, date)] || emptyCell();
+      const shifts = cell.shifts.map(getShift).filter(Boolean);
+      const dayHours = shifts.reduce((sum, shift) => sum + workHours(shift), 0);
+      const working = dayHours > 0;
+      if (dayHours > 10) monthlyOvertime += dayHours - 10;
+
+      if (dayHours > 12) {
+        results.push(compliance(employee.id, date, "DAY_12H", "block", `當日排班 ${dayHours.toFixed(1)} 小時，正常工時加延長工時不得超過 12 小時。`, "縮短班段或改由其他員工支援。"));
+      } else if (dayHours > 10) {
+        results.push(compliance(employee.id, date, "DAY_10H", "warn", `當日排班 ${dayHours.toFixed(1)} 小時，超過四週變形工時單日正常工時 10 小時。`, "超過 10 小時部分需列為延長工時，且當日延長工時不得超過 2 小時。"));
+      }
+
+      shifts.forEach((shift) => {
+        if (rawDurationHours(shift) > 4 && shift.breakMinutes < 30) {
+          results.push(compliance(employee.id, date, "REST_30M", "warn", `${shift.name} 連續工作超過 4 小時，休息未達 30 分鐘。`, "調整班中休息時間。"));
+        }
+      });
+
+      if (previousLastEnd && shifts.length) {
+        const firstStart = getShiftStart(date, shifts[0]);
+        const restHours = (firstStart - previousLastEnd) / (60 * 60 * 1000);
+        if (restHours < 11) {
+          results.push(compliance(employee.id, date, "SHIFT_11H", "warn", `換班間隔 ${restHours.toFixed(1)} 小時，少於 11 小時。`, "調整前後班別或由其他員工支援。"));
+        }
+      }
+
+      consecutive = working ? consecutive + 1 : 0;
+      if (consecutive > 12) {
+        results.push(compliance(employee.id, date, "CONSEC_12D", "block", "四週變形工時下連續出勤不得超過 12 日。", "調整例假與休息日，避免連續上班超過 12 天。"));
+      }
+
+      const weekKey = getWeekKey(date);
+      if (!weekBuckets.has(weekKey)) weekBuckets.set(weekKey, { rest: 0 });
+      const weekBucket = weekBuckets.get(weekKey);
+
+      const twoWeekKey = getCycleKey(date, days[0], 14, "2W");
+      if (!twoWeekBuckets.has(twoWeekKey)) twoWeekBuckets.set(twoWeekKey, { regular: 0, days: 0 });
+      const twoWeekBucket = twoWeekBuckets.get(twoWeekKey);
+      twoWeekBucket.days += 1;
+
+      const fourWeekKey = getCycleKey(date, days[0], 28, "4W");
+      if (!fourWeekBuckets.has(fourWeekKey)) fourWeekBuckets.set(fourWeekKey, { hours: 0, rest: 0, regular: 0, off: 0, days: 0 });
+      const fourWeekBucket = fourWeekBuckets.get(fourWeekKey);
+      fourWeekBucket.days += 1;
+      fourWeekBucket.hours += dayHours;
+
+      if (cell.leaveType === "例假") {
+        twoWeekBucket.regular += 1;
+        fourWeekBucket.regular += 1;
+      }
+      if (cell.leaveType === "休息日") fourWeekBucket.rest += 1;
+      if (cell.leaveType === "例假" || cell.leaveType === "休息日" || cell.leaveType === "休") {
+        weekBucket.rest += 1;
+        fourWeekBucket.off += 1;
+      }
+
+      if (holidayDates.has(date) && working) {
+        results.push(compliance(employee.id, date, "HOLIDAY_WORK", "warn", "國定假日安排出勤，需由人資另行確認給付或補休。", "請確認薪資或補休處理。"));
+      }
+
+      previousLastEnd = shifts.length ? getShiftEnd(date, shifts[shifts.length - 1]) : previousLastEnd;
+    });
+
+    weekBuckets.forEach((bucket, weekKey) => {
+      if (bucket.rest < 1) {
+        results.push(compliance(employee.id, weekKey, "WEEK_REST_MARK", "warn", "本週未排任何例假或休息日，可能造成連續出勤風險。", "以四週週期重新檢查例假與休息日分布。"));
+      }
+    });
+
+    twoWeekBuckets.forEach((bucket, periodKey) => {
+      if (bucket.days < 14) return;
+      if (bucket.regular < 2) {
+        results.push(compliance(employee.id, periodKey, "TWO_WEEK_REGULAR_2D", "block", "四週變形工時每兩週內至少需有 2 天例假日。", "補足兩週週期內的例假日。"));
+      }
+    });
+
+    fourWeekBuckets.forEach((bucket, periodKey) => {
+      if (bucket.days < 28) return;
+      const normalLimit = Math.min(160, employee.contractHours * 4);
+      if (bucket.hours > normalLimit) {
+        results.push(compliance(employee.id, periodKey, "FOUR_WEEK_160H", "block", `四週總工時 ${bucket.hours.toFixed(1)} 小時，超過四週正常工時上限 ${normalLimit.toFixed(1)} 小時。`, "降低四週週期內班段；超出四週正常工時部分需另依加班或休息日出勤處理。"));
+      }
+      if (bucket.off < 8) {
+        results.push(compliance(employee.id, periodKey, "FOUR_WEEK_OFF_8D", "block", `四週內例假加休息日共 ${bucket.off} 天，少於 8 天。`, "四週內需安排合計 8 天例假/休息日。"));
+      }
+      if (bucket.regular < 4) {
+        results.push(compliance(employee.id, periodKey, "FOUR_WEEK_REGULAR_4D", "block", `四週內例假 ${bucket.regular} 天，少於 4 天。`, "四週內需排入至少 4 天例假，且每兩週至少 2 天。"));
+      }
+      if (bucket.rest < 4) {
+        results.push(compliance(employee.id, periodKey, "FOUR_WEEK_REST_4D", "block", `四週內休息日 ${bucket.rest} 天，少於 4 天。`, "四週內需排入至少 4 天休息日。"));
+      }
+    });
+
+    if (monthlyOvertime > 46) {
+      results.push(compliance(employee.id, state.month, "MONTH_OT_46H", "block", `本月延長工時估計 ${monthlyOvertime.toFixed(1)} 小時，超過 46 小時。`, "調整月內班表或確認延長工時程序。"));
     }
   });
   return results;
@@ -1180,6 +1292,16 @@ function getWeekKey(date) {
   const start = new Date(d.getTime() - day * MS_PER_DAY);
   const end = new Date(start.getTime() + 6 * MS_PER_DAY);
   return `${formatDate(start)}~${formatDate(end)}`;
+}
+
+function getCycleKey(date, cycleStart, cycleDays, prefix) {
+  const start = new Date(`${cycleStart}T00:00:00`);
+  const current = new Date(`${date}T00:00:00`);
+  const diffDays = Math.floor((current - start) / MS_PER_DAY);
+  const index = Math.floor(diffDays / cycleDays);
+  const periodStart = new Date(start.getTime() + index * cycleDays * MS_PER_DAY);
+  const periodEnd = new Date(periodStart.getTime() + (cycleDays - 1) * MS_PER_DAY);
+  return `${prefix} ${formatDate(periodStart)}~${formatDate(periodEnd)}`;
 }
 
 function getShift(id) {
