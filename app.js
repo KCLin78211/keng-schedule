@@ -173,12 +173,18 @@ function canAccessAdminViews() {
   return state.roleView === "hr" || state.roleView === "admin";
 }
 
+function requireAdminAccess() {
+  if (canAccessAdminViews()) return true;
+  alert("只有人資與系統管理員可以修改資料維護。");
+  return false;
+}
+
 function canSeeAllEmployees() {
   return state.roleView === "hr" || state.roleView === "admin" || state.roleView === "manager";
 }
 
 function canEditScheduleCell() {
-  return ["employee", "manager", "hr", "admin"].includes(state.roleView);
+  return ["manager", "hr", "admin"].includes(state.roleView);
 }
 
 function applyMobileScheduleView() {
@@ -432,6 +438,7 @@ function renderCellAlertItem(alert, actions) {
   const handled = actionText.trim().length > 0;
   const severityLabel = alert.severity === "block" ? "阻擋" : "警告";
   const severityClass = handled ? "severity-handled" : (alert.severity === "block" ? "severity-block" : "severity-warn");
+  const actionDisabled = canEditScheduleCell() ? "" : " disabled";
   return `
     <article class="cell-alert-item ${severityClass}">
       <div>
@@ -441,7 +448,7 @@ function renderCellAlertItem(alert, actions) {
       <em>${escapeHtml(alert.suggestion)}</em>
       <label class="alert-action-field">
         <span>處理方式</span>
-        <textarea rows="2" data-alert-action-key="${escapeHtml(actionKey)}" placeholder="例如：已確認補休日期、已調整班表、已留存同意紀錄">${escapeHtml(actionText)}</textarea>
+        <textarea rows="2" data-alert-action-key="${escapeHtml(actionKey)}" placeholder="例如：已確認補休日期、已調整班表、已留存同意紀錄"${actionDisabled}>${escapeHtml(actionText)}</textarea>
       </label>
     </article>
   `;
@@ -487,6 +494,7 @@ function clearDialogCell() {
 
 function applyQuickSchedule(event) {
   event.preventDefault();
+  if (!canEditScheduleCell()) return;
   const form = event.currentTarget;
   const formData = new FormData(form);
   const employeeId = formData.get("employeeId");
@@ -861,6 +869,7 @@ function renderLeaveBalanceItem(balance) {
 
 function addEmployee(event) {
   event.preventDefault();
+  if (!requireAdminAccess()) return;
   const form = new FormData(event.currentTarget);
   const id = form.get("id") || `e${Date.now()}`;
   const employeeData = {
@@ -890,6 +899,7 @@ function addEmployee(event) {
 
 function addShift(event) {
   event.preventDefault();
+  if (!requireAdminAccess()) return;
   const form = new FormData(event.currentTarget);
   const id = form.get("id") || `s${Date.now()}`;
   const shiftData = {
@@ -913,6 +923,7 @@ function addShift(event) {
 }
 
 function editEmployee(id) {
+  if (!requireAdminAccess()) return;
   const employee = state.employees.find((item) => item.id === id);
   if (!employee) return;
   const form = document.getElementById("employeeForm");
@@ -931,6 +942,7 @@ function editEmployee(id) {
 }
 
 function deleteEmployee(id) {
+  if (!requireAdminAccess()) return;
   const employee = state.employees.find((item) => item.id === id);
   if (!employee) return;
   if (!confirm(`確定刪除 ${employee.name}？此員工的本機排班資料也會移除。`)) return;
@@ -995,6 +1007,7 @@ function saveEmployeeLeaveBalanceFromForm(employeeId, formData) {
 }
 
 function editShift(id) {
+  if (!requireAdminAccess()) return;
   const shift = state.shifts.find((item) => item.id === id);
   if (!shift) return;
   const form = document.getElementById("shiftForm");
@@ -1012,6 +1025,7 @@ function editShift(id) {
 }
 
 function deleteShift(id) {
+  if (!requireAdminAccess()) return;
   const shift = state.shifts.find((item) => item.id === id);
   if (!shift) return;
   if (!confirm(`確定刪除班別 ${shift.name}？所有排班格中的此班別也會移除。`)) return;
@@ -1040,6 +1054,7 @@ function resetShiftForm() {
 
 function saveLeaveBalance(event) {
   event.preventDefault();
+  if (!requireAdminAccess()) return;
   const form = event.currentTarget;
   const formData = new FormData(form);
   const id = formData.get("id") || `lb${Date.now()}`;
@@ -1065,6 +1080,7 @@ function saveLeaveBalance(event) {
 }
 
 function editLeaveBalance(id) {
+  if (!requireAdminAccess()) return;
   const balance = state.leaveBalances.find((item) => item.id === id);
   if (!balance) return;
   const form = document.getElementById("leaveBalanceForm");
@@ -1084,6 +1100,7 @@ function editLeaveBalance(id) {
 }
 
 function deleteLeaveBalance(id) {
+  if (!requireAdminAccess()) return;
   const balance = state.leaveBalances.find((item) => item.id === id);
   if (!balance) return;
   if (!confirm("確定刪除此休假額度？排班格中的休假標記不會被刪除。")) return;
