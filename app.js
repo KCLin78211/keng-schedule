@@ -177,6 +177,10 @@ function canSeeAllEmployees() {
   return state.roleView === "hr" || state.roleView === "admin" || state.roleView === "manager";
 }
 
+function canEditScheduleCell() {
+  return ["employee", "manager", "hr", "admin"].includes(state.roleView);
+}
+
 function applyMobileScheduleView() {
   const schedulePanel = document.getElementById("schedule");
   if (!schedulePanel) return;
@@ -385,7 +389,7 @@ function openDialog(employeeId, date) {
   });
   document.getElementById("leaveType").value = cell.leaveType;
   document.getElementById("noteInput").value = cell.note;
-  setCellDialogEditMode(true);
+  setCellDialogEditMode(canEditScheduleCell());
   renderCellLeaveBalance(employeeId, date);
   renderCellAlertDetails(cellAlerts);
   document.getElementById("cellDialog").showModal();
@@ -445,6 +449,7 @@ function renderCellAlertItem(alert, actions) {
 
 function saveDialogCell() {
   if (!state.selectedCell) return;
+  if (!canEditScheduleCell()) return;
   const role = state.roleView;
   state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] = {
     ...getDialogCellValue(),
@@ -474,6 +479,7 @@ function getDialogCellValue() {
 
 function clearDialogCell() {
   if (!state.selectedCell) return;
+  if (!canEditScheduleCell()) return;
   state.schedule[cellKey(state.selectedCell.employeeId, state.selectedCell.date)] = emptyCell();
   document.getElementById("cellDialog").close();
   afterDataChange();
